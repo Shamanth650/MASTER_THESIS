@@ -1,0 +1,215 @@
+# ================================
+# LSS ScenarioRunner Template (v1)
+# Family: LSS
+# Output: CARLA ScenarioRunner (Python)
+#
+# NOTE:
+# - This is a TEMPLATE. Do NOT add logic here.
+# - Only placeholders must be filled by the final LLM.
+# - Placeholders use Jinja-style: {{ field_name }}
+# ================================
+
+import math
+import py_trees
+
+import carla
+
+from srunner.scenarios.basic_scenario import BasicScenario
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+
+from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (
+    ActorTransformSetter,
+    WaypointFollower,
+    LaneChange,
+    Idle,
+)
+
+from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (
+    InTriggerDistanceToVehicle,
+    InTimeToArrivalToVehicle,
+)
+
+from srunner.scenariomanager.scenarioatomics.atomic_criteria import (
+    CollisionTest,
+)
+
+
+def _kph_to_mps(kph: float) -> float:
+    return kph / 3.6
+
+
+class {{ scenario_class_name }}(BasicScenario):
+    """
+    Scenario Name: {{ scenario_name }}
+
+    LSS scenario template intended for cases like:
+    - Lane Support / Lane Change scenarios
+    - Cut-in / cut-out style interactions
+    - Lane keeping assistance evaluation with target vehicle interaction
+
+    All numeric values and actor definitions MUST be filled from user_config/minimal JSON.
+    """
+
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True):
+        self.world = world
+        self.map = CarlaDataProvider.get_map()
+        self.ego_vehicles = ego_vehicles
+        self.config = config
+        self.randomize = randomize
+        self.debug_mode = debug_mode
+        self.criteria_enable = criteria_enable
+
+        # ----------------------------
+        # Required placeholders
+        # ----------------------------
+        self.timeout = float({{ timeout_s }})
+
+        # Actor blueprints
+        self.target_blueprint = "{{ target_blueprint }}"   # e.g., "vehicle.audi.a2"
+        self.ego_blueprint = "{{ ego_blueprint }}"         # typically already spawned by ScenarioRunner, kept for reference
+
+        # Speeds (kph)
+        self.ego_speed_kph = float({{ ego_speed_kph }})
+        self.target_speed_kph = float({{ target_speed_kph }})
+
+        # Trigger choice:
+        # - Either trigger_distance_m OR ttc_trigger_s can be used by the LLM (one may be null in JSON)
+        self.trigger_distance_m = {{ trigger_distance_m }}  # e.g., 25.0
+        self.ttc_trigger_s = {{ ttc_trigger_s }}            # e.g., 3.5
+
+        # Lane change configuration for target
+        # direction: "left" or "right"
+        self.lane_change_direction = "{{ lane_change_direction }}"
+        self.lane_change_duration_s = float({{ lane_change_duration_s }})  # e.g., 3.0
+        self.lane_change_distance_m = float({{ lane_change_distance_m }})  # e.g., 25.0
+
+        # Layout parameters (recommended)
+        self.initial_distance_m = {{ initial_distance_m }}
+        self.lateral_offset_m = {{ lateral_offset_m }}
+
+        # Spawn transforms (absolute)
+        self.ego_spawn_transform = carla.Transform(
+            carla.Location(x=float({{ ego_spawn_x }}), y=float({{ ego_spawn_y }}), z=float({{ ego_spawn_z }})),
+            carla.Rotation(pitch=float({{ ego_spawn_pitch }}), yaw=float({{ ego_spawn_yaw }}), roll=float({{ ego_spawn_roll }}))
+        )
+
+        self.target_spawn_transform = carla.Transform(
+            carla.Location(x=float({{ target_spawn_x }}), y=float({{ target_spawn_y }}), z=float({{ target_spawn_z }})),
+            carla.Rotation(pitch=float({{ target_spawn_pitch }}), yaw=float({{ target_spawn_yaw }}), roll=float({{ target_spawn_roll }}))
+        )
+
+        self.other_actors = []
+
+        super({{ scenario_class_name }}, self).__init__(
+            name="{{ scenario_name }}",
+            ego_vehicles=ego_vehicles,
+            config=config,
+            world=world,
+            debug_mode=debug_mode,
+            criteria_enable=criteria_enable
+        )
+
+    def _initialize_actors(self, config):
+        """
+        Spawn/position actors.
+        - Ego is typically already spawned by ScenarioRunner; still safe to set transform if required.
+        - Target vehicle is spawned here as "other actor".
+        """
+
+        ego = self.ego_vehicles[0]
+
+        # Optionally set ego to a known transform (if your pipeline needs it)
+        ego.set_transform(self.ego_spawn_transform)
+
+        # Spawn target
+        bp_lib = self.world.get_blueprint_library()
+        tgt_bp = bp_lib.find(self.target_blueprint)
+
+        target_actor = self.world.try_spawn_actor(tgt_bp, self.target_spawn_transform)
+        if target_actor is None:
+            raise RuntimeError("Failed to spawn target actor with blueprint: {{ target_blueprint }}")
+
+        self.other_actors.append(target_actor)
+
+    def _create_behavior(self):
+        """
+        Behavior tree:
+        1) Place actors
+        2) Wait until trigger (distance or TTC)
+        3) Ego drives at constant speed
+        4) Target drives, then performs lane change (LaneChange atomic)
+        5) Run for post-trigger duration
+        """
+
+        ego = self.ego_vehicles[0]
+        target = self.other_actors[0]
+
+        ego_speed_mps = _kph_to_mps(self.ego_speed_kph)
+        target_speed_mps = _kph_to_mps(self.target_speed_kph)
+
+        root = py_trees.composites.Sequence(name="LSS_Root")
+
+        # 1) Ensure transforms are set at start
+        root.add_child(ActorTransformSetter(ego, self.ego_spawn_transform))
+        root.add_child(ActorTransformSetter(target, self.target_spawn_transform))
+
+        # 2) Trigger condition: prefer TTC if provided, else use distance
+        # NOTE: LLM should pick one by filling the other as None/null.
+        if self.ttc_trigger_s is not None:
+            trigger = InTimeToArrivalToVehicle(
+                other_actor=target,
+                ego_vehicle=ego,
+                time=float(self.ttc_trigger_s)
+            )
+        else:
+            trigger = InTriggerDistanceToVehicle(
+                other_actor=target,
+                ego_vehicle=ego,
+                distance=float(self.trigger_distance_m)
+            )
+        root.add_child(trigger)
+
+        # 3) Ego motion
+        root.add_child(WaypointFollower(ego, ego_speed_mps))
+
+        # 4) Target motion (before lane change)
+        root.add_child(WaypointFollower(target, target_speed_mps))
+
+        # 4b) Lane change (target)
+        # LaneChange atomic is used here as a placeholder behavior.
+        # The exact parameters vary across ScenarioRunner versions; keep these placeholders fixed.
+        # If your ScenarioRunner build uses a different signature, update template v2 later.
+        if self.lane_change_direction.lower() == "left":
+            direction = "left"
+        else:
+            direction = "right"
+
+        root.add_child(
+            LaneChange(
+                target,
+                direction=direction,
+                distance=self.lane_change_distance_m,
+                duration=self.lane_change_duration_s
+            )
+        )
+
+        # 5) Let scenario run for a fixed duration after lane change
+        root.add_child(Idle(duration=float({{ post_trigger_duration_s }})))
+
+        return root
+
+    def _create_test_criteria(self):
+        """
+        Minimal evaluation criteria:
+        - Collision test for ego vehicle
+        """
+        criteria = []
+        if self.criteria_enable:
+            criteria.append(CollisionTest(self.ego_vehicles[0]))
+        return criteria
+
+    def __del__(self):
+        """
+        Cleanup handled by ScenarioRunner / BasicScenario
+        """
+        pass

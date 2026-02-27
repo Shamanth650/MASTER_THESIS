@@ -1,0 +1,323 @@
+# ================================
+# AEB ScenarioRunner Template (v2 - null-friendly)
+# Family: AEB
+# Output: CARLA ScenarioRunner (Python)
+#
+# NOTE:
+# - This is a TEMPLATE. Keep structure stable.
+# - Placeholders use Jinja-style: {{ field_name }}
+# - Nulls are VALID. If null, apply safe defaults instead of crashing.
+# ================================
+
+import math
+import py_trees
+import carla
+
+from srunner.scenarios.basic_scenario import BasicScenario
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+
+from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (
+    ActorTransformSetter,
+    WaypointFollower,
+    Idle,
+)
+
+from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (
+    InTriggerDistanceToVehicle,
+    InTimeToArrivalToVehicle,
+)
+
+from srunner.scenariomanager.scenarioatomics.atomic_criteria import (
+    CollisionTest,
+)
+
+
+def _kph_to_mps(kph: float) -> float:
+    return kph / 3.6
+
+
+def _safe_float(v, default: float) -> float:
+    try:
+        if v is None:
+            return float(default)
+        return float(v)
+    except Exception:
+        return float(default)
+
+
+def _is_number(v) -> bool:
+    try:
+        float(v)
+        return True
+    except Exception:
+        return False
+
+
+def _default_spawn_pair(world_map, gap_m: float, lateral_offset_m: float):
+    """
+    Pick a deterministic straight-road spawn pair for (ego, target) using waypoints.
+    - Ego at some reference waypoint
+    - Target ahead by gap_m in same lane
+    - Apply lateral_offset by shifting right vector
+    """
+    # Use a deterministic waypoint: first spawn point if available, else a fixed waypoint.
+    spawn_points = world_map.get_spawn_points()
+    if spawn_points:
+        ego_tf = spawn_points[0]
+        wp = world_map.get_waypoint(ego_tf.location, project_to_road=True, lane_type=carla.LaneType.Driving)
+        if wp is None:
+            return ego_tf, ego_tf
+    else:
+        # fallback: arbitrary location, map will project
+        wp = world_map.get_waypoint(carla.Location(x=0.0, y=0.0, z=0.0), project_to_road=True, lane_type=carla.LaneType.Driving)
+        if wp is None:
+            # last resort: identity transforms (runner may override)
+            tf = carla.Transform(carla.Location(x=0.0, y=0.0, z=0.5), carla.Rotation())
+            return tf, tf
+
+    ego_tf = wp.transform
+
+    # move target forward along lane
+    nxt = wp.next(max(gap_m, 1.0))
+    target_wp = nxt[0] if nxt else wp
+    target_tf = target_wp.transform
+
+    # apply lateral offset to both using lane right vector
+    if abs(lateral_offset_m) > 1e-6:
+        right = ego_tf.get_right_vector()
+        ego_tf.location.x += right.x * lateral_offset_m
+        ego_tf.location.y += right.y * lateral_offset_m
+
+        right2 = target_tf.get_right_vector()
+        target_tf.location.x += right2.x * lateral_offset_m
+        target_tf.location.y += right2.y * lateral_offset_m
+
+    return ego_tf, target_tf
+
+
+class {{ scenario_class_name }}(BasicScenario):
+    """
+    Scenario Name: {{ scenario_name }}
+
+    AEB scenario template intended for cases like:
+    - Car-to-Car Rear
+    - Stationary target
+    - Moving target
+    - Braking target
+    - Cut-in variants (lane change parameters can be used by higher-level logic later)
+
+    Null-friendly:
+    - Missing trigger parameters are allowed when trigger_type == START_IMMEDIATELY.
+    - Missing spawn coordinates are allowed; defaults are computed from map waypoints.
+    """
+
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True):
+        self.world = world
+        self.map = CarlaDataProvider.get_map()
+        self.ego_vehicles = ego_vehicles
+        self.config = config
+        self.randomize = randomize
+        self.debug_mode = debug_mode
+        self.criteria_enable = criteria_enable
+
+        # ----------------------------
+        # Placeholders (null-friendly defaults)
+        # ----------------------------
+        self.timeout = _safe_float({{ timeout_s }}, 60.0)
+
+        # Blueprints
+        self.target_blueprint = "{{ target_blueprint }}"
+        self.ego_blueprint = "{{ ego_blueprint }}"  # ego is usually pre-spawned by ScenarioRunner
+
+        # Speeds (kph)
+        self.ego_speed_kph = _safe_float({{ ego_speed_kph }}, 50.0)
+        self.target_speed_kph = _safe_float({{ target_speed_kph }}, 0.0)
+
+        # Trigger type controls which trigger primitive is used:
+        # START_IMMEDIATELY | TTC | DISTANCE
+        self.trigger_type = "{{ trigger_type }}"
+
+        # Trigger parameters (may be null)
+        self.trigger_distance_m = {{ trigger_distance_m }}  # may be None
+        self.ttc_trigger_s = {{ ttc_trigger_s }}            # may be None
+
+        # Optional braking behavior for target (may be null)
+        self.target_decel_mps2 = {{ target_decel_mps2 }}
+        self.target_brake_duration_s = {{ target_brake_duration_s }}
+
+        # Layout (may be null)
+        self.initial_distance_m = {{ initial_distance_m }}
+        self.initial_gap_m = {{ initial_gap_m }}
+        self.lateral_offset_m = {{ lateral_offset_m }}
+        self.overlap_percent = {{ overlap_percent }}  # optional, may remain unused
+
+        # Spawn transforms (absolute) - may be null
+        # If any required coordinate is null, we compute defaults from map.
+        self.ego_spawn_x = {{ ego_spawn_x }}
+        self.ego_spawn_y = {{ ego_spawn_y }}
+        self.ego_spawn_z = {{ ego_spawn_z }}
+        self.ego_spawn_pitch = {{ ego_spawn_pitch }}
+        self.ego_spawn_yaw = {{ ego_spawn_yaw }}
+        self.ego_spawn_roll = {{ ego_spawn_roll }}
+
+        self.target_spawn_x = {{ target_spawn_x }}
+        self.target_spawn_y = {{ target_spawn_y }}
+        self.target_spawn_z = {{ target_spawn_z }}
+        self.target_spawn_pitch = {{ target_spawn_pitch }}
+        self.target_spawn_yaw = {{ target_spawn_yaw }}
+        self.target_spawn_roll = {{ target_spawn_roll }}
+
+        self.ego_spawn_transform = None
+        self.target_spawn_transform = None
+
+        self.other_actors = []
+
+        super({{ scenario_class_name }}, self).__init__(
+            name="{{ scenario_name }}",
+            ego_vehicles=ego_vehicles,
+            config=config,
+            world=world,
+            debug_mode=debug_mode,
+            criteria_enable=criteria_enable
+        )
+
+    def _build_spawn_transforms(self):
+        """
+        Build ego/target transforms.
+        - If absolute coords are valid numbers, use them.
+        - Otherwise compute defaults from the map with initial_gap/initial_distance and lateral_offset.
+        """
+        # Choose gap preference: initial_gap_m > initial_distance_m > default
+        gap = 15.0
+        if self.initial_gap_m is not None and _is_number(self.initial_gap_m):
+            gap = float(self.initial_gap_m)
+        elif self.initial_distance_m is not None and _is_number(self.initial_distance_m):
+            gap = float(self.initial_distance_m)
+
+        lat = 0.0
+        if self.lateral_offset_m is not None and _is_number(self.lateral_offset_m):
+            lat = float(self.lateral_offset_m)
+
+        has_ego_abs = all(_is_number(v) for v in [self.ego_spawn_x, self.ego_spawn_y, self.ego_spawn_z, self.ego_spawn_pitch, self.ego_spawn_yaw, self.ego_spawn_roll])
+        has_tgt_abs = all(_is_number(v) for v in [self.target_spawn_x, self.target_spawn_y, self.target_spawn_z, self.target_spawn_pitch, self.target_spawn_yaw, self.target_spawn_roll])
+
+        if has_ego_abs:
+            self.ego_spawn_transform = carla.Transform(
+                carla.Location(x=float(self.ego_spawn_x), y=float(self.ego_spawn_y), z=float(self.ego_spawn_z)),
+                carla.Rotation(pitch=float(self.ego_spawn_pitch), yaw=float(self.ego_spawn_yaw), roll=float(self.ego_spawn_roll)),
+            )
+
+        if has_tgt_abs:
+            self.target_spawn_transform = carla.Transform(
+                carla.Location(x=float(self.target_spawn_x), y=float(self.target_spawn_y), z=float(self.target_spawn_z)),
+                carla.Rotation(pitch=float(self.target_spawn_pitch), yaw=float(self.target_spawn_yaw), roll=float(self.target_spawn_roll)),
+            )
+
+        if self.ego_spawn_transform is None or self.target_spawn_transform is None:
+            ego_tf, target_tf = _default_spawn_pair(self.map, gap_m=gap, lateral_offset_m=lat)
+            if self.ego_spawn_transform is None:
+                self.ego_spawn_transform = ego_tf
+            if self.target_spawn_transform is None:
+                self.target_spawn_transform = target_tf
+
+    def _initialize_actors(self, config):
+        """
+        Spawn/position actors.
+        - Ego is typically already spawned by ScenarioRunner; still safe to set transform if required.
+        - Target vehicle is spawned here as "other actor".
+        """
+        self._build_spawn_transforms()
+
+        ego = self.ego_vehicles[0]
+
+        # Place ego deterministically
+        try:
+            ego.set_transform(self.ego_spawn_transform)
+        except Exception:
+            pass
+
+        # Spawn target
+        bp_lib = self.world.get_blueprint_library()
+        tgt_bp = bp_lib.find(self.target_blueprint)
+
+        target_actor = self.world.try_spawn_actor(tgt_bp, self.target_spawn_transform)
+        if target_actor is None:
+            raise RuntimeError("Failed to spawn target actor with blueprint: {{ target_blueprint }}")
+
+        self.other_actors.append(target_actor)
+
+    def _create_behavior(self):
+        """
+        Behavior tree:
+        1) Place actors
+        2) Wait until trigger (START_IMMEDIATELY / TTC / DISTANCE)
+        3) Ego drives at constant speed (WaypointFollower)
+        4) Target drives at target speed (WaypointFollower) OR remains stationary (0 speed)
+        5) Optional braking phase if provided
+        6) Run for post-trigger duration
+        """
+        ego = self.ego_vehicles[0]
+        target = self.other_actors[0]
+
+        ego_speed_mps = _kph_to_mps(self.ego_speed_kph)
+        target_speed_mps = _kph_to_mps(self.target_speed_kph)
+
+        root = py_trees.composites.Sequence(name="AEB_Root")
+
+        # 1) Ensure transforms are set at start
+        root.add_child(ActorTransformSetter(ego, self.ego_spawn_transform))
+        root.add_child(ActorTransformSetter(target, self.target_spawn_transform))
+
+        # 2) Trigger condition:
+        trig = (self.trigger_type or "").strip().upper()
+
+        if trig == "START_IMMEDIATELY" or trig == "":
+            # No trigger wait needed
+            pass
+        elif trig == "TTC":
+            ttc = self.ttc_trigger_s
+            if ttc is None:
+                ttc = 2.0  # safe default
+            root.add_child(InTimeToArrivalToVehicle(other_actor=target, ego_vehicle=ego, time=float(ttc)))
+        elif trig == "DISTANCE":
+            dist = self.trigger_distance_m
+            if dist is None:
+                dist = 40.0  # safe default
+            root.add_child(InTriggerDistanceToVehicle(other_actor=target, ego_vehicle=ego, distance=float(dist)))
+        else:
+            # Unknown trigger type: do not block; start immediately.
+            pass
+
+        # 3) Ego motion
+        root.add_child(WaypointFollower(ego, ego_speed_mps))
+
+        # 4) Target motion
+        root.add_child(WaypointFollower(target, target_speed_mps))
+
+        # 4b) Optional target braking phase (only if specified)
+        if self.target_decel_mps2 is not None:
+            dur = self.target_brake_duration_s
+            if dur is None:
+                dur = 1.0
+            root.add_child(Idle(duration=float(dur)))
+
+        # 5) Let scenario run for a fixed duration after trigger
+        root.add_child(Idle(duration=float({{ post_trigger_duration_s }})))
+
+        return root
+
+    def _create_test_criteria(self):
+        """
+        Minimal evaluation criteria:
+        - Collision test for ego vehicle
+        """
+        criteria = []
+        if self.criteria_enable:
+            criteria.append(CollisionTest(self.ego_vehicles[0]))
+        return criteria
+
+    def __del__(self):
+        """
+        Cleanup handled by ScenarioRunner / BasicScenario
+        """
+        pass

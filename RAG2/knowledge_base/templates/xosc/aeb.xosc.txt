@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ================================
+     AEB OpenSCENARIO Template (v2 - null-friendly & complete)
+     Family: AEB
+     Output: OpenSCENARIO (.xosc)
+     NOTE:
+     - This is a TEMPLATE. Do NOT add runtime logic outside placeholders.
+     - Only placeholders must be filled by the final LLM.
+     - Placeholders use Jinja-style: {{ field_name }}
+     - Nulls are VALID in input; LLM must apply safe defaults when values are null.
+     ================================ -->
+
+<OpenSCENARIO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:noNamespaceSchemaLocation="OpenSCENARIO.xsd">
+
+  <!-- GENERATED_BY: {{ generated_by }} -->
+
+  <FileHeader revMajor="1" revMinor="0"
+              date="{{ file_date }}"
+              description="{{ scenario_name }}"
+              author="{{ author }}"/>
+
+  <ParameterDeclarations>
+    <!-- Optional: keep empty or add parameters later -->
+  </ParameterDeclarations>
+
+  <CatalogLocations>
+    <!-- Keep empty unless catalogs are explicitly used -->
+  </CatalogLocations>
+
+  <RoadNetwork>
+    <!-- Do NOT hardcode logic.xodr; fill only if provided -->
+    <LogicFile filepath="{{ logic_file_path }}"/>
+    <SceneGraphFile filepath="{{ scene_graph_file_path }}"/>
+  </RoadNetwork>
+
+  <Entities>
+    <ScenarioObject name="ego">
+      <Vehicle name="{{ ego_vehicle_name }}" vehicleCategory="{{ ego_vehicle_category }}">
+        <BoundingBox>
+          <Center x="{{ ego_bb_center_x }}" y="{{ ego_bb_center_y }}" z="{{ ego_bb_center_z }}"/>
+          <Dimensions width="{{ ego_bb_width }}" length="{{ ego_bb_length }}" height="{{ ego_bb_height }}"/>
+        </BoundingBox>
+        <Performance maxSpeed="{{ ego_perf_max_speed }}" maxAcceleration="{{ ego_perf_max_accel }}" maxDeceleration="{{ ego_perf_max_decel }}"/>
+        <Axles>
+          <FrontAxle maxSteering="{{ ego_front_max_steer }}" wheelDiameter="{{ ego_front_wheel_diam }}" trackWidth="{{ ego_front_track }}" positionX="{{ ego_front_pos_x }}" positionZ="{{ ego_front_pos_z }}"/>
+          <RearAxle maxSteering="{{ ego_rear_max_steer }}" wheelDiameter="{{ ego_rear_wheel_diam }}" trackWidth="{{ ego_rear_track }}" positionX="{{ ego_rear_pos_x }}" positionZ="{{ ego_rear_pos_z }}"/>
+        </Axles>
+        <Properties>
+          <!-- CARLA blueprint -->
+          <Property name="model" value="{{ ego_blueprint }}"/>
+        </Properties>
+      </Vehicle>
+    </ScenarioObject>
+
+    <ScenarioObject name="target">
+      <Vehicle name="{{ target_vehicle_name }}" vehicleCategory="{{ target_vehicle_category }}">
+        <BoundingBox>
+          <Center x="{{ target_bb_center_x }}" y="{{ target_bb_center_y }}" z="{{ target_bb_center_z }}"/>
+          <Dimensions width="{{ target_bb_width }}" length="{{ target_bb_length }}" height="{{ target_bb_height }}"/>
+        </BoundingBox>
+        <Performance maxSpeed="{{ target_perf_max_speed }}" maxAcceleration="{{ target_perf_max_accel }}" maxDeceleration="{{ target_perf_max_decel }}"/>
+        <Axles>
+          <FrontAxle maxSteering="{{ target_front_max_steer }}" wheelDiameter="{{ target_front_wheel_diam }}" trackWidth="{{ target_front_track }}" positionX="{{ target_front_pos_x }}" positionZ="{{ target_front_pos_z }}"/>
+          <RearAxle maxSteering="{{ target_rear_max_steer }}" wheelDiameter="{{ target_rear_wheel_diam }}" trackWidth="{{ target_rear_track }}" positionX="{{ target_rear_pos_x }}" positionZ="{{ target_rear_pos_z }}"/>
+        </Axles>
+        <Properties>
+          <!-- CARLA blueprint -->
+          <Property name="model" value="{{ target_blueprint }}"/>
+        </Properties>
+      </Vehicle>
+    </ScenarioObject>
+  </Entities>
+
+  <Storyboard>
+    <Init>
+      <Actions>
+
+        <!-- ========= Placement =========
+             Preferred: LanePosition (deterministic on Town maps)
+             Fallback: WorldPosition
+             LLM must fill:
+               - If lane position info is available or can be defaulted, use LanePosition.
+               - Else, use WorldPosition.
+             NOTE: This template includes BOTH blocks but one must be neutralized by filling the unused one with safe defaults
+                   AND setting the other as the actual intended values.
+        -->
+
+        <!-- Place ego -->
+        <Private entityRef="ego">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+
+                <!-- LanePosition (preferred) -->
+                <LanePosition roadId="{{ ego_road_id }}" laneId="{{ ego_lane_id }}" s="{{ ego_s }}" offset="{{ ego_lane_offset }}"/>
+
+                <!-- WorldPosition (fallback) -->
+                <WorldPosition x="{{ ego_spawn_x }}" y="{{ ego_spawn_y }}" z="{{ ego_spawn_z }}"
+                               h="{{ ego_spawn_yaw }}" p="{{ ego_spawn_pitch }}" r="{{ ego_spawn_roll }}"/>
+
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+        </Private>
+
+        <!-- Place target -->
+        <Private entityRef="target">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+
+                <!-- LanePosition (preferred): target ahead by initial_gap_m / initial_distance_m -->
+                <LanePosition roadId="{{ target_road_id }}" laneId="{{ target_lane_id }}" s="{{ target_s }}" offset="{{ target_lane_offset }}"/>
+
+                <!-- WorldPosition (fallback) -->
+                <WorldPosition x="{{ target_spawn_x }}" y="{{ target_spawn_y }}" z="{{ target_spawn_z }}"
+                               h="{{ target_spawn_yaw }}" p="{{ target_spawn_pitch }}" r="{{ target_spawn_roll }}"/>
+
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+        </Private>
+
+        <!-- Set initial ego speed -->
+        <Private entityRef="ego">
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="{{ ego_speed_mps }}"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+        </Private>
+
+        <!-- Set initial target speed -->
+        <Private entityRef="target">
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="{{ target_speed_mps }}"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+        </Private>
+
+      </Actions>
+    </Init>
+
+    <Story name="AEB_Story">
+      <Act name="AEB_Act">
+
+        <!-- Optional target braking event.
+             If not applicable, set target_brake_enable = false and the trigger will never fire.
+        -->
+        <ManeuverGroup name="Target_ManeuverGroup" maximumExecutionCount="1">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="target"/>
+          </Actors>
+
+          <Maneuver name="Target_Maneuver">
+            <Event name="Target_Event" priority="overwrite">
+
+              <Action name="Target_Brake_Action">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear"
+                                           value="{{ target_brake_dynamics_value }}"
+                                           dynamicsDimension="{{ target_brake_dynamics_dimension }}"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="{{ target_speed_after_brake_mps }}"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+
+              <!-- ========= Trigger selection (ONE active) =========
+                   trigger_type must be one of:
+                     START_IMMEDIATELY | TTC | DISTANCE
+                   LLM must ensure only the matching condition is active.
+              -->
+              <StartTrigger>
+                <ConditionGroup>
+
+                  <!-- START_IMMEDIATELY: fire at time > 0 -->
+                  <Condition name="StartImmediately" delay="0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="{{ start_time_s }}" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+
+                  <!-- TTC trigger -->
+                  <Condition name="TTC_Trigger" delay="0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="ego"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <TimeToCollisionCondition value="{{ ttc_trigger_s }}" rule="lessThan">
+                          <TimeToCollisionConditionTarget>
+                            <EntityRef entityRef="target"/>
+                          </TimeToCollisionConditionTarget>
+                        </TimeToCollisionCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+
+                  <!-- DISTANCE trigger -->
+                  <Condition name="Distance_Trigger" delay="0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="ego"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <RelativeDistanceCondition value="{{ trigger_distance_m }}" rule="lessThan"
+                          relativeDistanceType="euclideanDistance" freespace="true">
+                          <EntityRef entityRef="target"/>
+                        </RelativeDistanceCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+
+                </ConditionGroup>
+              </StartTrigger>
+
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- Act ends after a fixed duration -->
+        <StopTrigger>
+          <ConditionGroup>
+            <Condition name="Act_End_Time" delay="0" conditionEdge="rising">
+              <ByValueCondition>
+                <SimulationTimeCondition value="{{ post_trigger_duration_s }}" rule="greaterThan"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StopTrigger>
+
+      </Act>
+    </Story>
+
+    <!-- Scenario hard timeout -->
+    <StopTrigger>
+      <ConditionGroup>
+        <Condition name="Scenario_End_Timeout" delay="0" conditionEdge="rising">
+          <ByValueCondition>
+            <SimulationTimeCondition value="{{ timeout_s }}" rule="greaterThan"/>
+          </ByValueCondition>
+        </Condition>
+      </ConditionGroup>
+    </StopTrigger>
+
+  </Storyboard>
+</OpenSCENARIO>

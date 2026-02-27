@@ -1,0 +1,1422 @@
+[
+  {
+    "user_config": {
+      "entities": {
+        "vru": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "ego": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "target": {
+          "spawn": null,
+          "blueprint": null
+        }
+      },
+      "trigger": {
+        "distance_m": null,
+        "ttc_s": null,
+        "type": null
+      },
+      "dynamics": {
+        "ego_speed_kph_max": null,
+        "target_speed_kph": null,
+        "ego_speed_kph": null,
+        "target_speed_kph_min": null,
+        "target_speed_kph_max": null,
+        "ego_speed_kph_min": null
+      },
+      "extensions": {
+        "notes": null
+      },
+      "termination": {
+        "stop_on_collision": true,
+        "timeout_s": 60
+      },
+      "map": {
+        "lane_id": null,
+        "road_id": null,
+        "road_selection_mode": null,
+        "town": null
+      },
+      "behavior": {
+        "target_behavior": null,
+        "ego_decel_mps2": null,
+        "vru_motion": {
+          "speed_mps_min": null,
+          "crossing_side": null,
+          "path_offset_m": null,
+          "speed_mps_max": null,
+          "speed_mps": null
+        },
+        "target_decel_mps2": null,
+        "target_brake_duration_s": null,
+        "lane_change": {
+          "maneuver_type": null,
+          "duration_s": null,
+          "distance_m": null,
+          "lateral_offset_m": null,
+          "direction": null
+        },
+        "scenario_variant": null
+      },
+      "layout": {
+        "initial_gap_m": null,
+        "initial_distance_m": null,
+        "lateral_offset_m": null,
+        "overlap_percent": null
+      }
+    },
+    "scenario_details": {
+      "is_scenario": true,
+      "scenario": "Car-to-Car Rear Stationary",
+      "ttc": null,
+      "ttc_end": null,
+      "ego_speed_min": 10,
+      "ego_speed_max": 80,
+      "target_speed_min": 0,
+      "target_speed_max": 0,
+      "ego_vehicle_type": null,
+      "target_vehicle_type": "GVT",
+      "overlap_percent": null,
+      "lateral_offset_m": null,
+      "initial_distance_m": null,
+      "headway_m": null,
+      "target_decel_mps2": null,
+      "ego_decel_mps2": null,
+      "road_layout": null,
+      "notes": "CCRs scenario tests AEB at 10-50 km/h (AEB+FCW combined) or 10-80 km/h (AEB only), and FCW at 55-80 km/h. Target (GVT) is stationary (0 km/h). Overlap range is -50% to +50% with 25% steps.",
+      "extra": {
+        "evidence": [
+          {
+            "field": "scenario_details.scenario",
+            "page": 21,
+            "match": "Car-to-Car Rear stationary"
+          },
+          {
+            "field": "scenario_details.ego_speed_min",
+            "page": 21,
+            "match": "AEB CCRs 10-50 km/h ... 10-80 km/h (from table image euro-ncap-aeb-c2c-test-protocol-v431_p21_table_3.png)"
+          },
+          {
+            "field": "scenario_details.ego_speed_max",
+            "page": 21,
+            "match": "AEB CCRs ... 10-80 km/h -50% to 50% (from table image euro-ncap-aeb-c2c-test-protocol-v431_p21_table_3.png)"
+          },
+          {
+            "field": "scenario_details.target_speed_min",
+            "page": 21,
+            "match": "GVT 0 km/h (from diagram image euro-ncap-aeb-c2c-test-protocol-v431_p21_0.jpeg)"
+          },
+          {
+            "field": "scenario_details.target_speed_max",
+            "page": 21,
+            "match": "GVT 0 km/h (from diagram image euro-ncap-aeb-c2c-test-protocol-v431_p21_0.jpeg)"
+          },
+          {
+            "field": "scenario_details.target_vehicle_type",
+            "page": 9,
+            "match": "Global Vehicle Target (GVT)"
+          },
+          {
+            "field": "scenario_details.extra.allowed_values.overlap_percent",
+            "page": 21,
+            "match": "-50% to 50% with 25% steps in overlap"
+          }
+        ],
+        "adas_family": "AEB",
+        "allowed_values": {
+          "overlap_percent": [
+            -50,
+            -25,
+            0,
+            25,
+            50
+          ]
+        }
+      }
+    },
+    "id": null,
+    "domain": "ADAS",
+    "classification": {
+      "family": "AEB",
+      "subtype": null,
+      "variant": "rear_stationary"
+    },
+    "name": "Car-to-Car Rear Stationary",
+    "source": {
+      "standard": "Euro NCAP",
+      "evidence": [
+        {
+          "field": "scenario_details.scenario",
+          "page": 21,
+          "match": "Car-to-Car Rear stationary"
+        },
+        {
+          "field": "scenario_details.ego_speed_min",
+          "page": 21,
+          "match": "AEB CCRs 10-50 km/h ... 10-80 km/h (from table image euro-ncap-aeb-c2c-test-protocol-v431_p21_table_3.png)"
+        },
+        {
+          "field": "scenario_details.ego_speed_max",
+          "page": 21,
+          "match": "AEB CCRs ... 10-80 km/h -50% to 50% (from table image euro-ncap-aeb-c2c-test-protocol-v431_p21_table_3.png)"
+        },
+        {
+          "field": "scenario_details.target_speed_min",
+          "page": 21,
+          "match": "GVT 0 km/h (from diagram image euro-ncap-aeb-c2c-test-protocol-v431_p21_0.jpeg)"
+        },
+        {
+          "field": "scenario_details.target_speed_max",
+          "page": 21,
+          "match": "GVT 0 km/h (from diagram image euro-ncap-aeb-c2c-test-protocol-v431_p21_0.jpeg)"
+        },
+        {
+          "field": "scenario_details.target_vehicle_type",
+          "page": 9,
+          "match": "Global Vehicle Target (GVT)"
+        },
+        {
+          "field": "scenario_details.extra.allowed_values.overlap_percent",
+          "page": 21,
+          "match": "-50% to 50% with 25% steps in overlap"
+        }
+      ]
+    }
+  },
+  {
+    "user_config": {
+      "entities": {
+        "vru": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "ego": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "target": {
+          "spawn": null,
+          "blueprint": null
+        }
+      },
+      "trigger": {
+        "distance_m": null,
+        "ttc_s": null,
+        "type": null
+      },
+      "dynamics": {
+        "ego_speed_kph_max": null,
+        "target_speed_kph": null,
+        "ego_speed_kph": null,
+        "target_speed_kph_min": null,
+        "target_speed_kph_max": null,
+        "ego_speed_kph_min": null
+      },
+      "extensions": {
+        "notes": null
+      },
+      "termination": {
+        "stop_on_collision": true,
+        "timeout_s": 60
+      },
+      "map": {
+        "lane_id": null,
+        "road_id": null,
+        "road_selection_mode": null,
+        "town": null
+      },
+      "behavior": {
+        "target_behavior": null,
+        "ego_decel_mps2": null,
+        "vru_motion": {
+          "speed_mps_min": null,
+          "crossing_side": null,
+          "path_offset_m": null,
+          "speed_mps_max": null,
+          "speed_mps": null
+        },
+        "target_decel_mps2": null,
+        "target_brake_duration_s": null,
+        "lane_change": {
+          "maneuver_type": null,
+          "duration_s": null,
+          "distance_m": null,
+          "lateral_offset_m": null,
+          "direction": null
+        },
+        "scenario_variant": null
+      },
+      "layout": {
+        "initial_gap_m": null,
+        "initial_distance_m": null,
+        "lateral_offset_m": null,
+        "overlap_percent": null
+      }
+    },
+    "scenario_details": {
+      "is_scenario": true,
+      "scenario": "Car-to-Car Rear Moving",
+      "ttc": null,
+      "ttc_end": null,
+      "ego_speed_min": 30,
+      "ego_speed_max": 80,
+      "target_speed_min": null,
+      "target_speed_max": null,
+      "ego_vehicle_type": null,
+      "target_vehicle_type": "GVT",
+      "overlap_percent": null,
+      "lateral_offset_m": null,
+      "initial_distance_m": null,
+      "headway_m": null,
+      "target_decel_mps2": null,
+      "ego_decel_mps2": null,
+      "road_layout": null,
+      "notes": "CCRm scenario: VUT travels forwards towards GVT travelling at constant speed. Protocol specifies VUT speed range 30-80 km/h and overlap range -50% to 50%. GVT speed is constant but specific value not fixed by protocol for this scenario.",
+      "extra": {
+        "evidence": [
+          {
+            "field": "scenario_details.scenario",
+            "page": 22,
+            "match": "Car-to-Car Rear moving"
+          },
+          {
+            "field": "scenario_details.ego_speed_min",
+            "page": 22,
+            "match": "AEB CCRm 30-80 km/h"
+          },
+          {
+            "field": "scenario_details.ego_speed_max",
+            "page": 22,
+            "match": "AEB CCRm 30-80 km/h"
+          },
+          {
+            "field": "scenario_details.target_vehicle_type",
+            "page": 7,
+            "match": "Global Vehicle Target (GVT)"
+          },
+          {
+            "field": "scenario_details.extra.overlap_range",
+            "page": 22,
+            "match": "-50%-50%"
+          }
+        ],
+        "adas_family": "AEB",
+        "overlap_range": {
+          "min_percent": -50,
+          "max_percent": 50
+        }
+      }
+    },
+    "id": null,
+    "domain": "ADAS",
+    "classification": {
+      "family": "AEB",
+      "subtype": null,
+      "variant": "rear_moving"
+    },
+    "name": "Car-to-Car Rear Moving",
+    "source": {
+      "standard": "Euro NCAP",
+      "evidence": [
+        {
+          "field": "scenario_details.scenario",
+          "page": 22,
+          "match": "Car-to-Car Rear moving"
+        },
+        {
+          "field": "scenario_details.ego_speed_min",
+          "page": 22,
+          "match": "AEB CCRm 30-80 km/h"
+        },
+        {
+          "field": "scenario_details.ego_speed_max",
+          "page": 22,
+          "match": "AEB CCRm 30-80 km/h"
+        },
+        {
+          "field": "scenario_details.target_vehicle_type",
+          "page": 7,
+          "match": "Global Vehicle Target (GVT)"
+        },
+        {
+          "field": "scenario_details.extra.overlap_range",
+          "page": 22,
+          "match": "-50%-50%"
+        }
+      ]
+    }
+  },
+  {
+    "user_config": {
+      "entities": {
+        "vru": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "ego": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "target": {
+          "spawn": null,
+          "blueprint": null
+        }
+      },
+      "trigger": {
+        "distance_m": null,
+        "ttc_s": null,
+        "type": null
+      },
+      "dynamics": {
+        "ego_speed_kph_max": null,
+        "target_speed_kph": null,
+        "ego_speed_kph": null,
+        "target_speed_kph_min": null,
+        "target_speed_kph_max": null,
+        "ego_speed_kph_min": null
+      },
+      "extensions": {
+        "notes": null
+      },
+      "termination": {
+        "stop_on_collision": true,
+        "timeout_s": 60
+      },
+      "map": {
+        "lane_id": null,
+        "road_id": null,
+        "road_selection_mode": null,
+        "town": null
+      },
+      "behavior": {
+        "target_behavior": null,
+        "ego_decel_mps2": null,
+        "vru_motion": {
+          "speed_mps_min": null,
+          "crossing_side": null,
+          "path_offset_m": null,
+          "speed_mps_max": null,
+          "speed_mps": null
+        },
+        "target_decel_mps2": null,
+        "target_brake_duration_s": null,
+        "lane_change": {
+          "maneuver_type": null,
+          "duration_s": null,
+          "distance_m": null,
+          "lateral_offset_m": null,
+          "direction": null
+        },
+        "scenario_variant": null
+      },
+      "layout": {
+        "initial_gap_m": null,
+        "initial_distance_m": null,
+        "lateral_offset_m": null,
+        "overlap_percent": null
+      }
+    },
+    "scenario_details": {
+      "is_scenario": true,
+      "scenario": "Car-to-Car Rear Braking",
+      "ttc": null,
+      "ttc_end": null,
+      "ego_speed_min": 50,
+      "ego_speed_max": 50,
+      "target_speed_min": 50,
+      "target_speed_max": 50,
+      "ego_vehicle_type": null,
+      "target_vehicle_type": "GVT",
+      "overlap_percent": null,
+      "lateral_offset_m": null,
+      "initial_distance_m": null,
+      "headway_m": null,
+      "target_decel_mps2": null,
+      "ego_decel_mps2": null,
+      "road_layout": null,
+      "notes": "CCRb tests are performed at a fixed speed of 50 km/h for both VUT and GVT. Target deceleration values are -2 m/s² and -6 m/s² (discrete set). Headway values are 12 m and 40 m (discrete set). These are not ranges but discrete test combinations.",
+      "extra": {
+        "evidence": [
+          {
+            "field": "scenario_details.scenario",
+            "page": 22,
+            "match": "Car-to-Car Rear braking"
+          },
+          {
+            "field": "scenario_details.ego_speed_min",
+            "page": 22,
+            "match": "fixed speed of 50km/h for both VUT and GVT"
+          },
+          {
+            "field": "scenario_details.ego_speed_max",
+            "page": 22,
+            "match": "fixed speed of 50km/h for both VUT and GVT"
+          },
+          {
+            "field": "scenario_details.target_speed_min",
+            "page": 22,
+            "match": "fixed speed of 50km/h for both VUT and GVT"
+          },
+          {
+            "field": "scenario_details.target_speed_max",
+            "page": 22,
+            "match": "fixed speed of 50km/h for both VUT and GVT"
+          },
+          {
+            "field": "scenario_details.target_vehicle_type",
+            "page": 9,
+            "match": "Global Vehicle Target (GVT)"
+          },
+          {
+            "field": "scenario_details.extra.allowed_values.target_decel_mps2",
+            "page": 22,
+            "match": "-2 and -6m/s² acceleration"
+          },
+          {
+            "field": "scenario_details.extra.allowed_values.headway_m",
+            "page": 22,
+            "match": "12 and 40m headway"
+          }
+        ],
+        "adas_family": "AEB",
+        "allowed_values": {
+          "target_decel_mps2": [
+            -2,
+            -6
+          ],
+          "headway_m": [
+            12,
+            40
+          ]
+        }
+      }
+    },
+    "id": null,
+    "domain": "ADAS",
+    "classification": {
+      "family": "AEB",
+      "subtype": null,
+      "variant": null
+    },
+    "name": "Car-to-Car Rear Braking",
+    "source": {
+      "standard": "Euro NCAP",
+      "evidence": [
+        {
+          "field": "scenario_details.scenario",
+          "page": 22,
+          "match": "Car-to-Car Rear braking"
+        },
+        {
+          "field": "scenario_details.ego_speed_min",
+          "page": 22,
+          "match": "fixed speed of 50km/h for both VUT and GVT"
+        },
+        {
+          "field": "scenario_details.ego_speed_max",
+          "page": 22,
+          "match": "fixed speed of 50km/h for both VUT and GVT"
+        },
+        {
+          "field": "scenario_details.target_speed_min",
+          "page": 22,
+          "match": "fixed speed of 50km/h for both VUT and GVT"
+        },
+        {
+          "field": "scenario_details.target_speed_max",
+          "page": 22,
+          "match": "fixed speed of 50km/h for both VUT and GVT"
+        },
+        {
+          "field": "scenario_details.target_vehicle_type",
+          "page": 9,
+          "match": "Global Vehicle Target (GVT)"
+        },
+        {
+          "field": "scenario_details.extra.allowed_values.target_decel_mps2",
+          "page": 22,
+          "match": "-2 and -6m/s² acceleration"
+        },
+        {
+          "field": "scenario_details.extra.allowed_values.headway_m",
+          "page": 22,
+          "match": "12 and 40m headway"
+        }
+      ]
+    }
+  },
+  {
+    "user_config": {
+      "entities": {
+        "vru": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "ego": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "target": {
+          "spawn": null,
+          "blueprint": null
+        }
+      },
+      "trigger": {
+        "distance_m": null,
+        "ttc_s": null,
+        "type": null
+      },
+      "dynamics": {
+        "ego_speed_kph_max": null,
+        "target_speed_kph": null,
+        "ego_speed_kph": null,
+        "target_speed_kph_min": null,
+        "target_speed_kph_max": null,
+        "ego_speed_kph_min": null
+      },
+      "extensions": {
+        "notes": null
+      },
+      "termination": {
+        "stop_on_collision": true,
+        "timeout_s": 60
+      },
+      "map": {
+        "lane_id": null,
+        "road_id": null,
+        "road_selection_mode": null,
+        "town": null
+      },
+      "behavior": {
+        "target_behavior": null,
+        "ego_decel_mps2": null,
+        "vru_motion": {
+          "speed_mps_min": null,
+          "crossing_side": null,
+          "path_offset_m": null,
+          "speed_mps_max": null,
+          "speed_mps": null
+        },
+        "target_decel_mps2": null,
+        "target_brake_duration_s": null,
+        "lane_change": {
+          "maneuver_type": null,
+          "duration_s": null,
+          "distance_m": null,
+          "lateral_offset_m": null,
+          "direction": null
+        },
+        "scenario_variant": null
+      },
+      "layout": {
+        "initial_gap_m": null,
+        "initial_distance_m": null,
+        "lateral_offset_m": null,
+        "overlap_percent": null
+      }
+    },
+    "scenario_details": {
+      "is_scenario": true,
+      "scenario": "Car-to-Car Front Turn-Across-Path",
+      "ttc": null,
+      "ttc_end": null,
+      "ego_speed_min": 10,
+      "ego_speed_max": 20,
+      "target_speed_min": 30,
+      "target_speed_max": 60,
+      "ego_vehicle_type": "M1",
+      "target_vehicle_type": "GVT",
+      "overlap_percent": null,
+      "lateral_offset_m": null,
+      "initial_distance_m": null,
+      "headway_m": null,
+      "target_decel_mps2": null,
+      "ego_decel_mps2": null,
+      "road_layout": "junction",
+      "notes": "VUT follows initial straight-line path, then turn (clothoid-radius-clothoid), then straight line. GVT follows straight-line path in adjacent lane opposite direction. Paths synchronized for 50% overlap at front edges. Turn signal applied 1.0s ±0.5s before Tsteer.",
+      "extra": {
+        "evidence": [
+          {
+            "field": "scenario_details.scenario",
+            "page": 23,
+            "match": "Car-to-Car Front turn-across-path"
+          },
+          {
+            "field": "scenario_details.ego_speed_min",
+            "page": 20,
+            "match": "VUT speeds of 10, 15 and 20 km/h"
+          },
+          {
+            "field": "scenario_details.ego_speed_max",
+            "page": 20,
+            "match": "VUT speeds of 10, 15 and 20 km/h"
+          },
+          {
+            "field": "scenario_details.target_speed_min",
+            "page": 20,
+            "match": "GVT speeds of 30, 45 and 60 km/h"
+          },
+          {
+            "field": "scenario_details.target_speed_max",
+            "page": 20,
+            "match": "GVT speeds of 30, 45 and 60 km/h"
+          },
+          {
+            "field": "scenario_details.ego_vehicle_type",
+            "page": 9,
+            "match": "typical M1 passenger vehicle"
+          },
+          {
+            "field": "scenario_details.target_vehicle_type",
+            "page": 9,
+            "match": "Global Vehicle Target (GVT)"
+          },
+          {
+            "field": "scenario_details.road_layout",
+            "page": 11,
+            "match": "CCFtap and CCCscp tests described in this document requires the use of a junction"
+          },
+          {
+            "field": "scenario_details.extra.allowed_values.ego_speed_kph",
+            "page": 20,
+            "match": "VUT speeds of 10, 15 and 20 km/h"
+          },
+          {
+            "field": "scenario_details.extra.allowed_values.target_speed_kph",
+            "page": 20,
+            "match": "GVT speeds of 30, 45 and 60 km/h"
+          }
+        ],
+        "adas_family": "AEB",
+        "allowed_values": {
+          "ego_speed_kph": [
+            10,
+            15,
+            20
+          ],
+          "target_speed_kph": [
+            30,
+            45,
+            60
+          ]
+        }
+      }
+    },
+    "id": null,
+    "domain": "ADAS",
+    "classification": {
+      "family": "AEB",
+      "subtype": null,
+      "variant": null
+    },
+    "name": "Car-to-Car Front Turn-Across-Path",
+    "source": {
+      "standard": "Euro NCAP",
+      "evidence": [
+        {
+          "field": "scenario_details.scenario",
+          "page": 23,
+          "match": "Car-to-Car Front turn-across-path"
+        },
+        {
+          "field": "scenario_details.ego_speed_min",
+          "page": 20,
+          "match": "VUT speeds of 10, 15 and 20 km/h"
+        },
+        {
+          "field": "scenario_details.ego_speed_max",
+          "page": 20,
+          "match": "VUT speeds of 10, 15 and 20 km/h"
+        },
+        {
+          "field": "scenario_details.target_speed_min",
+          "page": 20,
+          "match": "GVT speeds of 30, 45 and 60 km/h"
+        },
+        {
+          "field": "scenario_details.target_speed_max",
+          "page": 20,
+          "match": "GVT speeds of 30, 45 and 60 km/h"
+        },
+        {
+          "field": "scenario_details.ego_vehicle_type",
+          "page": 9,
+          "match": "typical M1 passenger vehicle"
+        },
+        {
+          "field": "scenario_details.target_vehicle_type",
+          "page": 9,
+          "match": "Global Vehicle Target (GVT)"
+        },
+        {
+          "field": "scenario_details.road_layout",
+          "page": 11,
+          "match": "CCFtap and CCCscp tests described in this document requires the use of a junction"
+        },
+        {
+          "field": "scenario_details.extra.allowed_values.ego_speed_kph",
+          "page": 20,
+          "match": "VUT speeds of 10, 15 and 20 km/h"
+        },
+        {
+          "field": "scenario_details.extra.allowed_values.target_speed_kph",
+          "page": 20,
+          "match": "GVT speeds of 30, 45 and 60 km/h"
+        }
+      ]
+    }
+  },
+  {
+    "user_config": {
+      "entities": {
+        "vru": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "ego": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "target": {
+          "spawn": null,
+          "blueprint": null
+        }
+      },
+      "trigger": {
+        "distance_m": null,
+        "ttc_s": null,
+        "type": null
+      },
+      "dynamics": {
+        "ego_speed_kph_max": null,
+        "target_speed_kph": null,
+        "ego_speed_kph": null,
+        "target_speed_kph_min": null,
+        "target_speed_kph_max": null,
+        "ego_speed_kph_min": null
+      },
+      "extensions": {
+        "notes": null
+      },
+      "termination": {
+        "stop_on_collision": true,
+        "timeout_s": 60
+      },
+      "map": {
+        "lane_id": null,
+        "road_id": null,
+        "road_selection_mode": null,
+        "town": null
+      },
+      "behavior": {
+        "target_behavior": null,
+        "ego_decel_mps2": null,
+        "vru_motion": {
+          "speed_mps_min": null,
+          "crossing_side": null,
+          "path_offset_m": null,
+          "speed_mps_max": null,
+          "speed_mps": null
+        },
+        "target_decel_mps2": null,
+        "target_brake_duration_s": null,
+        "lane_change": {
+          "maneuver_type": null,
+          "duration_s": null,
+          "distance_m": null,
+          "lateral_offset_m": null,
+          "direction": null
+        },
+        "scenario_variant": null
+      },
+      "layout": {
+        "initial_gap_m": null,
+        "initial_distance_m": null,
+        "lateral_offset_m": null,
+        "overlap_percent": null
+      }
+    },
+    "scenario_details": {
+      "is_scenario": true,
+      "scenario": "Car-to-Car Front Head-On Straight",
+      "ttc": null,
+      "ttc_end": null,
+      "ego_speed_min": 50,
+      "ego_speed_max": 70,
+      "target_speed_min": 50,
+      "target_speed_max": 70,
+      "ego_vehicle_type": null,
+      "target_vehicle_type": "GVT",
+      "overlap_percent": null,
+      "lateral_offset_m": null,
+      "initial_distance_m": null,
+      "headway_m": null,
+      "target_decel_mps2": null,
+      "ego_decel_mps2": null,
+      "road_layout": "two-lane road with lane markings",
+      "notes": "CCFhos scenario: VUT travels straight in lane, GVT travels opposite direction having drifted into VUT lane. Test speeds are 50/50 km/h and 70/70 km/h combinations. Lane width 3.5-3.7m. VUT and GVT speeds shall be equal.",
+      "extra": {
+        "evidence": [
+          {
+            "field": "scenario_details.scenario",
+            "page": 21,
+            "match": "CCFtap, CCCscp and CCFhos/CCFhol scenarios as shown in the sections 8.2.3 to 8.2.5."
+          },
+          {
+            "field": "scenario_details.ego_speed_min",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.ego_speed_max",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.target_speed_min",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.target_speed_max",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.target_vehicle_type",
+            "page": 23,
+            "match": "the GVT will follow the same path as the VUT"
+          },
+          {
+            "field": "scenario_details.road_layout",
+            "page": 23,
+            "match": "lane markings as defined in UNECE Regulation 130 to mark a lane with a width of 3.5 to 3.7m"
+          },
+          {
+            "field": "scenario_details.notes",
+            "page": 4,
+            "match": "CCFhos – a collision where a vehicle is travelling along a straight path within its defined lane and strikes another vehicle travelling in the opposite direction, which has drifted into the same lane"
+          },
+          {
+            "field": "scenario_details.extra.allowed_values.ego_speed_kph",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          }
+        ],
+        "adas_family": "AEB",
+        "allowed_values": {
+          "ego_speed_kph": [
+            50,
+            70
+          ],
+          "target_speed_kph": [
+            50,
+            70
+          ]
+        }
+      }
+    },
+    "id": null,
+    "domain": "ADAS",
+    "classification": {
+      "family": "AEB",
+      "subtype": null,
+      "variant": "rear_stationary"
+    },
+    "name": "Car-to-Car Front Head-On Straight",
+    "source": {
+      "standard": "Euro NCAP",
+      "evidence": [
+        {
+          "field": "scenario_details.scenario",
+          "page": 21,
+          "match": "CCFtap, CCCscp and CCFhos/CCFhol scenarios as shown in the sections 8.2.3 to 8.2.5."
+        },
+        {
+          "field": "scenario_details.ego_speed_min",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.ego_speed_max",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.target_speed_min",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.target_speed_max",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.target_vehicle_type",
+          "page": 23,
+          "match": "the GVT will follow the same path as the VUT"
+        },
+        {
+          "field": "scenario_details.road_layout",
+          "page": 23,
+          "match": "lane markings as defined in UNECE Regulation 130 to mark a lane with a width of 3.5 to 3.7m"
+        },
+        {
+          "field": "scenario_details.notes",
+          "page": 4,
+          "match": "CCFhos – a collision where a vehicle is travelling along a straight path within its defined lane and strikes another vehicle travelling in the opposite direction, which has drifted into the same lane"
+        },
+        {
+          "field": "scenario_details.extra.allowed_values.ego_speed_kph",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        }
+      ]
+    }
+  },
+  {
+    "user_config": {
+      "entities": {
+        "vru": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "ego": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "target": {
+          "spawn": null,
+          "blueprint": null
+        }
+      },
+      "trigger": {
+        "distance_m": null,
+        "ttc_s": null,
+        "type": null
+      },
+      "dynamics": {
+        "ego_speed_kph_max": null,
+        "target_speed_kph": null,
+        "ego_speed_kph": null,
+        "target_speed_kph_min": null,
+        "target_speed_kph_max": null,
+        "ego_speed_kph_min": null
+      },
+      "extensions": {
+        "notes": null
+      },
+      "termination": {
+        "stop_on_collision": true,
+        "timeout_s": 60
+      },
+      "map": {
+        "lane_id": null,
+        "road_id": null,
+        "road_selection_mode": null,
+        "town": null
+      },
+      "behavior": {
+        "target_behavior": null,
+        "ego_decel_mps2": null,
+        "vru_motion": {
+          "speed_mps_min": null,
+          "crossing_side": null,
+          "path_offset_m": null,
+          "speed_mps_max": null,
+          "speed_mps": null
+        },
+        "target_decel_mps2": null,
+        "target_brake_duration_s": null,
+        "lane_change": {
+          "maneuver_type": null,
+          "duration_s": null,
+          "distance_m": null,
+          "lateral_offset_m": null,
+          "direction": null
+        },
+        "scenario_variant": null
+      },
+      "layout": {
+        "initial_gap_m": null,
+        "initial_distance_m": null,
+        "lateral_offset_m": null,
+        "overlap_percent": null
+      }
+    },
+    "scenario_details": {
+      "is_scenario": true,
+      "scenario": "Car-to-Car Front Head-On Lane change",
+      "ttc": null,
+      "ttc_end": 1.5,
+      "ego_speed_min": 50,
+      "ego_speed_max": 70,
+      "target_speed_min": 50,
+      "target_speed_max": 70,
+      "ego_vehicle_type": null,
+      "target_vehicle_type": "GVT",
+      "overlap_percent": null,
+      "lateral_offset_m": null,
+      "initial_distance_m": null,
+      "headway_m": null,
+      "target_decel_mps2": null,
+      "ego_decel_mps2": null,
+      "road_layout": "two-lane road with lane markings",
+      "notes": "VUT and GVT speeds shall be equal for all CCFho scenarios. Lane change offset is 3.5m, lane change length is 44m at 50km/h and 60m at 70km/h. TTC at end of lane change is 1.5s for both speed combinations. Max lateral acceleration is 1.50 m/s².",
+      "extra": {
+        "evidence": [
+          {
+            "field": "scenario_details.scenario",
+            "page": 21,
+            "match": "CCFtap, CCCscp and CCFhos/CCFhol scenarios as shown in the sections 8.2.3 to 8.2.5."
+          },
+          {
+            "field": "scenario_details.ego_speed_min",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.ego_speed_max",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.target_speed_min",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.target_speed_max",
+            "page": 23,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.ttc_end",
+            "page": 24,
+            "match": "TTC at end of lane change [1.5] s"
+          },
+          {
+            "field": "scenario_details.target_vehicle_type",
+            "page": 9,
+            "match": "Global Vehicle Target (GVT)"
+          },
+          {
+            "field": "scenario_details.road_layout",
+            "page": 23,
+            "match": "lane markings conforming to one of the lane markings as defined in UNECE Regulation 130 to mark a lane with a width of 3.5 to 3.7m"
+          },
+          {
+            "field": "scenario_details.extra.lane_change_offset_m",
+            "page": 24,
+            "match": "Lane change offset (O) 3.5m"
+          },
+          {
+            "field": "scenario_details.extra.lane_change_length_50kph_m",
+            "page": 24,
+            "match": "50km/h 50km/h 3.5m 44m"
+          },
+          {
+            "field": "scenario_details.extra.lane_change_length_70kph_m",
+            "page": 24,
+            "match": "70km/h 70km/h 3.5m 60m"
+          },
+          {
+            "field": "scenario_details.extra.max_lateral_accel_mps2",
+            "page": 24,
+            "match": "Max Lateral acceleration 1.50 m/s²"
+          }
+        ],
+        "adas_family": "AEB",
+        "lane_change_offset_m": 3.5,
+        "lane_change_length_50kph_m": 44,
+        "lane_change_length_70kph_m": 60,
+        "following_distance_50kph_m": 13.9,
+        "following_distance_70kph_m": 19.4,
+        "max_lateral_accel_mps2": 1.5,
+        "lane_width_min_m": 3.5,
+        "lane_width_max_m": 3.7,
+        "allowed_test_speeds_kph": [
+          50,
+          70
+        ]
+      }
+    },
+    "id": null,
+    "domain": "ADAS",
+    "classification": {
+      "family": "AEB",
+      "subtype": null,
+      "variant": null
+    },
+    "name": "Car-to-Car Front Head-On Lane change",
+    "source": {
+      "standard": "Euro NCAP",
+      "evidence": [
+        {
+          "field": "scenario_details.scenario",
+          "page": 21,
+          "match": "CCFtap, CCCscp and CCFhos/CCFhol scenarios as shown in the sections 8.2.3 to 8.2.5."
+        },
+        {
+          "field": "scenario_details.ego_speed_min",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.ego_speed_max",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.target_speed_min",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.target_speed_max",
+          "page": 23,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.ttc_end",
+          "page": 24,
+          "match": "TTC at end of lane change [1.5] s"
+        },
+        {
+          "field": "scenario_details.target_vehicle_type",
+          "page": 9,
+          "match": "Global Vehicle Target (GVT)"
+        },
+        {
+          "field": "scenario_details.road_layout",
+          "page": 23,
+          "match": "lane markings conforming to one of the lane markings as defined in UNECE Regulation 130 to mark a lane with a width of 3.5 to 3.7m"
+        },
+        {
+          "field": "scenario_details.extra.lane_change_offset_m",
+          "page": 24,
+          "match": "Lane change offset (O) 3.5m"
+        },
+        {
+          "field": "scenario_details.extra.lane_change_length_50kph_m",
+          "page": 24,
+          "match": "50km/h 50km/h 3.5m 44m"
+        },
+        {
+          "field": "scenario_details.extra.lane_change_length_70kph_m",
+          "page": 24,
+          "match": "70km/h 70km/h 3.5m 60m"
+        },
+        {
+          "field": "scenario_details.extra.max_lateral_accel_mps2",
+          "page": 24,
+          "match": "Max Lateral acceleration 1.50 m/s²"
+        }
+      ]
+    }
+  },
+  {
+    "user_config": {
+      "entities": {
+        "vru": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "ego": {
+          "spawn": null,
+          "blueprint": null
+        },
+        "target": {
+          "spawn": null,
+          "blueprint": null
+        }
+      },
+      "trigger": {
+        "distance_m": null,
+        "ttc_s": null,
+        "type": null
+      },
+      "dynamics": {
+        "ego_speed_kph_max": null,
+        "target_speed_kph": null,
+        "ego_speed_kph": null,
+        "target_speed_kph_min": null,
+        "target_speed_kph_max": null,
+        "ego_speed_kph_min": null
+      },
+      "extensions": {
+        "notes": null
+      },
+      "termination": {
+        "stop_on_collision": true,
+        "timeout_s": 60
+      },
+      "map": {
+        "lane_id": null,
+        "road_id": null,
+        "road_selection_mode": null,
+        "town": null
+      },
+      "behavior": {
+        "target_behavior": null,
+        "ego_decel_mps2": null,
+        "vru_motion": {
+          "speed_mps_min": null,
+          "crossing_side": null,
+          "path_offset_m": null,
+          "speed_mps_max": null,
+          "speed_mps": null
+        },
+        "target_decel_mps2": null,
+        "target_brake_duration_s": null,
+        "lane_change": {
+          "maneuver_type": null,
+          "duration_s": null,
+          "distance_m": null,
+          "lateral_offset_m": null,
+          "direction": null
+        },
+        "scenario_variant": null
+      },
+      "layout": {
+        "initial_gap_m": null,
+        "initial_distance_m": null,
+        "lateral_offset_m": null,
+        "overlap_percent": null
+      }
+    },
+    "scenario_details": {
+      "is_scenario": true,
+      "scenario": "Car-to-Car Front Head-On",
+      "ttc": null,
+      "ttc_end": null,
+      "ego_speed_min": 50,
+      "ego_speed_max": 70,
+      "target_speed_min": 50,
+      "target_speed_max": 70,
+      "ego_vehicle_type": null,
+      "target_vehicle_type": "GVT",
+      "overlap_percent": null,
+      "lateral_offset_m": null,
+      "initial_distance_m": null,
+      "headway_m": null,
+      "target_decel_mps2": null,
+      "ego_decel_mps2": null,
+      "road_layout": "two-lane road with lane markings",
+      "notes": "CCFho includes two sub-scenarios: CCFhos (straight) and CCFhol (lane change). VUT and GVT speeds shall be equal for all CCFho scenarios. Test speed combinations are 50km/h VUT with 50km/h GVT and 70km/h VUT with 70km/h GVT.",
+      "extra": {
+        "evidence": [
+          {
+            "field": "scenario_details.scenario",
+            "page": 27,
+            "match": "Car-to-Car Front Head-On (CCFho)"
+          },
+          {
+            "field": "scenario_details.ego_speed_min",
+            "page": 27,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.ego_speed_max",
+            "page": 27,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          },
+          {
+            "field": "scenario_details.target_speed_min",
+            "page": 27,
+            "match": "VUT and SOV speeds shall be equal for all CCFho scenarios"
+          },
+          {
+            "field": "scenario_details.target_speed_max",
+            "page": 27,
+            "match": "VUT and SOV speeds shall be equal for all CCFho scenarios"
+          },
+          {
+            "field": "scenario_details.target_vehicle_type",
+            "page": 13,
+            "match": "Global Vehicle Target (GVT)"
+          },
+          {
+            "field": "scenario_details.road_layout",
+            "page": 27,
+            "match": "lane markings conforming to one of the lane markings as defined in UNECE Regulation 130 to mark a lane with a width of 3.5 to 3.7m"
+          },
+          {
+            "field": "scenario_details.extra.allowed_values.ego_speed_kph",
+            "page": 27,
+            "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+          }
+        ],
+        "adas_family": "AEB",
+        "allowed_values": {
+          "ego_speed_kph": [
+            50,
+            70
+          ],
+          "target_speed_kph": [
+            50,
+            70
+          ]
+        }
+      }
+    },
+    "id": null,
+    "domain": "ADAS",
+    "classification": {
+      "family": "AEB",
+      "subtype": null,
+      "variant": null
+    },
+    "name": "Car-to-Car Front Head-On",
+    "source": {
+      "standard": "Euro NCAP",
+      "evidence": [
+        {
+          "field": "scenario_details.scenario",
+          "page": 27,
+          "match": "Car-to-Car Front Head-On (CCFho)"
+        },
+        {
+          "field": "scenario_details.ego_speed_min",
+          "page": 27,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.ego_speed_max",
+          "page": 27,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        },
+        {
+          "field": "scenario_details.target_speed_min",
+          "page": 27,
+          "match": "VUT and SOV speeds shall be equal for all CCFho scenarios"
+        },
+        {
+          "field": "scenario_details.target_speed_max",
+          "page": 27,
+          "match": "VUT and SOV speeds shall be equal for all CCFho scenarios"
+        },
+        {
+          "field": "scenario_details.target_vehicle_type",
+          "page": 13,
+          "match": "Global Vehicle Target (GVT)"
+        },
+        {
+          "field": "scenario_details.road_layout",
+          "page": 27,
+          "match": "lane markings conforming to one of the lane markings as defined in UNECE Regulation 130 to mark a lane with a width of 3.5 to 3.7m"
+        },
+        {
+          "field": "scenario_details.extra.allowed_values.ego_speed_kph",
+          "page": 27,
+          "match": "50km/h for VUT and 50km/h for GVT and 70km/h for VUT and 70km/h for GVT"
+        }
+      ]
+    }
+  }
+]

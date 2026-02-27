@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ================================
+     VRU OpenSCENARIO Template (v1)
+     Family: VRU
+     Output: OpenSCENARIO (.xosc)
+     NOTE:
+     - This is a TEMPLATE. Do NOT add logic here.
+     - Only placeholders must be filled by the final LLM.
+     - Placeholders use Jinja-style: {{ field_name }}
+     ================================ -->
+
+<OpenSCENARIO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:noNamespaceSchemaLocation="OpenSCENARIO.xsd">
+  <FileHeader revMajor="1" revMinor="0"
+              date="{{ file_date }}"
+              description="{{ scenario_name }}"
+              author="{{ author }}"/>
+
+  <ParameterDeclarations>
+    <!-- Optional: keep empty or add parameters later -->
+  </ParameterDeclarations>
+
+  <CatalogLocations>
+    <!-- Keep empty unless catalogs are explicitly used -->
+  </CatalogLocations>
+
+  <RoadNetwork>
+    <!-- Do NOT hardcode logic.xodr; fill only if provided -->
+    <LogicFile filepath="{{ logic_file_path }}"/>
+    <SceneGraphFile filepath="{{ scene_graph_file_path }}"/>
+  </RoadNetwork>
+
+  <Entities>
+    <ScenarioObject name="ego">
+      <Vehicle name="{{ ego_vehicle_name }}" vehicleCategory="{{ ego_vehicle_category }}">
+        <BoundingBox>
+          <Center x="{{ ego_bb_center_x }}" y="{{ ego_bb_center_y }}" z="{{ ego_bb_center_z }}"/>
+          <Dimensions width="{{ ego_bb_width }}" length="{{ ego_bb_length }}" height="{{ ego_bb_height }}"/>
+        </BoundingBox>
+        <Performance maxSpeed="{{ ego_perf_max_speed }}" maxAcceleration="{{ ego_perf_max_accel }}" maxDeceleration="{{ ego_perf_max_decel }}"/>
+        <Axles>
+          <FrontAxle maxSteering="{{ ego_front_max_steer }}" wheelDiameter="{{ ego_front_wheel_diam }}" trackWidth="{{ ego_front_track }}" positionX="{{ ego_front_pos_x }}" positionZ="{{ ego_front_pos_z }}"/>
+          <RearAxle maxSteering="{{ ego_rear_max_steer }}" wheelDiameter="{{ ego_rear_wheel_diam }}" trackWidth="{{ ego_rear_track }}" positionX="{{ ego_rear_pos_x }}" positionZ="{{ ego_rear_pos_z }}"/>
+        </Axles>
+        <Properties>
+          <Property name="type" value="{{ ego_blueprint }}"/>
+        </Properties>
+      </Vehicle>
+    </ScenarioObject>
+
+    <ScenarioObject name="vru">
+      <!-- VRU can be a pedestrian or bicycle. Keep as Pedestrian here; blueprint decides implementation downstream. -->
+      <Pedestrian name="{{ vru_ped_name }}" pedestrianCategory="{{ vru_ped_category }}" mass="{{ vru_mass }}">
+        <BoundingBox>
+          <Center x="{{ vru_bb_center_x }}" y="{{ vru_bb_center_y }}" z="{{ vru_bb_center_z }}"/>
+          <Dimensions width="{{ vru_bb_width }}" length="{{ vru_bb_length }}" height="{{ vru_bb_height }}"/>
+        </BoundingBox>
+        <Properties>
+          <Property name="type" value="{{ vru_blueprint }}"/>
+        </Properties>
+      </Pedestrian>
+    </ScenarioObject>
+  </Entities>
+
+  <Storyboard>
+    <Init>
+      <Actions>
+        <!-- Place ego -->
+        <Private entityRef="ego">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <WorldPosition x="{{ ego_spawn_x }}" y="{{ ego_spawn_y }}" z="{{ ego_spawn_z }}"
+                               h="{{ ego_spawn_yaw }}" p="{{ ego_spawn_pitch }}" r="{{ ego_spawn_roll }}"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+        </Private>
+
+        <!-- Place VRU -->
+        <Private entityRef="vru">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <WorldPosition x="{{ vru_spawn_x }}" y="{{ vru_spawn_y }}" z="{{ vru_spawn_z }}"
+                               h="{{ vru_spawn_yaw }}" p="{{ vru_spawn_pitch }}" r="{{ vru_spawn_roll }}"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+        </Private>
+
+        <!-- Set initial ego speed -->
+        <Private entityRef="ego">
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="{{ ego_speed_mps }}"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+        </Private>
+
+        <!-- Keep VRU stationary at init (speed 0) -->
+        <Private entityRef="vru">
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="0"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+        </Private>
+      </Actions>
+    </Init>
+
+    <Story name="VRU_Story">
+      <Act name="VRU_Act">
+
+        <ManeuverGroup name="VRU_ManeuverGroup" maximumExecutionCount="1">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="vru"/>
+          </Actors>
+
+          <Maneuver name="VRU_Maneuver">
+            <Event name="VRU_Event" priority="overwrite">
+
+              <!-- Start VRU movement on trigger -->
+              <Action name="VRU_Move_Action">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="{{ vru_speed_dynamics_value }}" dynamicsDimension="{{ vru_speed_dynamics_dimension }}"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="{{ vru_speed_mps }}"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+
+              <StartTrigger>
+                <ConditionGroup>
+
+                  <!-- Prefer TTC trigger if provided; otherwise distance trigger.
+                       LLM must fill only ONE of these as enabled and set the other to false/disabled. -->
+
+                  <Condition name="TTC_Trigger" delay="0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="ego"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <TimeToCollisionCondition value="{{ ttc_trigger_s }}" rule="lessThan">
+                          <TimeToCollisionConditionTarget>
+                            <EntityRef entityRef="vru"/>
+                          </TimeToCollisionConditionTarget>
+                        </TimeToCollisionCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+
+                  <Condition name="Distance_Trigger" delay="0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="ego"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <RelativeDistanceCondition value="{{ trigger_distance_m }}" rule="lessThan" relativeDistanceType="euclideanDistance" freespace="true">
+                          <EntityRef entityRef="vru"/>
+                        </RelativeDistanceCondition>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+
+                </ConditionGroup>
+              </StartTrigger>
+
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- Act ends after a fixed duration -->
+        <StopTrigger>
+          <ConditionGroup>
+            <Condition name="Act_End_Time" delay="0" conditionEdge="rising">
+              <ByValueCondition>
+                <SimulationTimeCondition value="{{ post_trigger_duration_s }}" rule="greaterThan"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StopTrigger>
+
+      </Act>
+    </Story>
+
+    <StopTrigger>
+      <ConditionGroup>
+        <Condition name="Scenario_End_Timeout" delay="0" conditionEdge="rising">
+          <ByValueCondition>
+            <SimulationTimeCondition value="{{ timeout_s }}" rule="greaterThan"/>
+          </ByValueCondition>
+        </Condition>
+      </ConditionGroup>
+    </StopTrigger>
+  </Storyboard>
+</OpenSCENARIO>

@@ -1,0 +1,205 @@
+# ================================
+# VRU ScenarioRunner Template (v1)
+# Family: VRU
+# Output: CARLA ScenarioRunner (Python)
+#
+# NOTE:
+# - This is a TEMPLATE. Do NOT add logic here.
+# - Only placeholders must be filled by the final LLM.
+# - Placeholders use Jinja-style: {{ field_name }}
+# ================================
+
+import math
+import py_trees
+
+import carla
+
+from srunner.scenarios.basic_scenario import BasicScenario
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+
+from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (
+    ActorTransformSetter,
+    WaypointFollower,
+    Idle,
+)
+
+from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (
+    InTriggerDistanceToVehicle,
+    InTimeToArrivalToVehicle,
+)
+
+from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
+
+
+def _kph_to_mps(kph: float) -> float:
+    return kph / 3.6
+
+
+class {{ scenario_class_name }}(BasicScenario):
+    """
+    Scenario Name: {{ scenario_name }}
+
+    VRU scenario template intended for cases like:
+    - pedestrian crossing
+    - bicyclist crossing
+    - VRU entering lane / crossing path of ego
+
+    All numeric values and actor definitions MUST be filled from user_config/minimal JSON.
+    """
+
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True):
+        self.world = world
+        self.map = CarlaDataProvider.get_map()
+        self.ego_vehicles = ego_vehicles
+        self.config = config
+        self.randomize = randomize
+        self.debug_mode = debug_mode
+        self.criteria_enable = criteria_enable
+
+        # ----------------------------
+        # Required placeholders
+        # ----------------------------
+        self.timeout = float({{ timeout_s }})
+
+        # Actor blueprints
+        self.vru_blueprint = "{{ vru_blueprint }}"   # e.g., "walker.pedestrian.0001" OR "vehicle.bh.crossbike"
+        self.ego_blueprint = "{{ ego_blueprint }}"   # typically already spawned by ScenarioRunner, kept for reference
+
+        # Speeds (kph)
+        self.ego_speed_kph = float({{ ego_speed_kph }})
+        self.vru_speed_kph = float({{ vru_speed_kph }})
+
+        # Trigger choice:
+        # - Either trigger_distance_m OR ttc_trigger_s can be used by the LLM (one may be null in JSON)
+        self.trigger_distance_m = {{ trigger_distance_m }}  # e.g., 20.0
+        self.ttc_trigger_s = {{ ttc_trigger_s }}            # e.g., 3.0
+
+        # Initial layout hints (optional but recommended)
+        self.initial_distance_m = {{ initial_distance_m }}  # distance between ego and conflict point at start
+        self.lateral_offset_m = {{ lateral_offset_m }}      # VRU lateral placement relative to lane center
+
+        # Spawn transforms (absolute)
+        # NOTE: Use CARLA Transform: location(x,y,z) + rotation(pitch,yaw,roll)
+        self.ego_spawn_transform = carla.Transform(
+            carla.Location(x=float({{ ego_spawn_x }}), y=float({{ ego_spawn_y }}), z=float({{ ego_spawn_z }})),
+            carla.Rotation(pitch=float({{ ego_spawn_pitch }}), yaw=float({{ ego_spawn_yaw }}), roll=float({{ ego_spawn_roll }}))
+        )
+
+        self.vru_spawn_transform = carla.Transform(
+            carla.Location(x=float({{ vru_spawn_x }}), y=float({{ vru_spawn_y }}), z=float({{ vru_spawn_z }})),
+            carla.Rotation(pitch=float({{ vru_spawn_pitch }}), yaw=float({{ vru_spawn_yaw }}), roll=float({{ vru_spawn_roll }}))
+        )
+
+        # VRU motion target:
+        # Option A: Provide explicit destination transform for VRU
+        self.vru_target_transform = carla.Transform(
+            carla.Location(x=float({{ vru_target_x }}), y=float({{ vru_target_y }}), z=float({{ vru_target_z }})),
+            carla.Rotation(pitch=float({{ vru_target_pitch }}), yaw=float({{ vru_target_yaw }}), roll=float({{ vru_target_roll }}))
+        )
+
+        # Optional: If VRU actor is a walker, you can use a very short waypoint list behavior.
+        # If VRU is a bicycle vehicle, WaypointFollower works well.
+
+        self.other_actors = []
+
+        super({{ scenario_class_name }}, self).__init__(
+            name="{{ scenario_name }}",
+            ego_vehicles=ego_vehicles,
+            config=config,
+            world=world,
+            debug_mode=debug_mode,
+            criteria_enable=criteria_enable
+        )
+
+    def _initialize_actors(self, config):
+        """
+        Spawn/position actors.
+        - Ego is typically already spawned by ScenarioRunner; still safe to set transform if required.
+        - VRU is spawned here as "other actor".
+        """
+
+        # Ensure ego exists
+        ego = self.ego_vehicles[0]
+
+        # Optionally set ego to a known transform (if your pipeline needs it)
+        ego.set_transform(self.ego_spawn_transform)
+
+        # Spawn VRU
+        bp_lib = self.world.get_blueprint_library()
+        vru_bp = bp_lib.find(self.vru_blueprint)
+
+        vru_actor = self.world.try_spawn_actor(vru_bp, self.vru_spawn_transform)
+        if vru_actor is None:
+            raise RuntimeError("Failed to spawn VRU actor with blueprint: {{ vru_blueprint }}")
+
+        self.other_actors.append(vru_actor)
+
+    def _create_behavior(self):
+        """
+        Behavior tree:
+        1) Place actors
+        2) Wait until trigger (distance or TTC)
+        3) Move VRU toward target
+        4) Keep ego driving at constant speed (handled via WaypointFollower on ego OR external controller)
+        5) End
+        """
+
+        ego = self.ego_vehicles[0]
+        vru = self.other_actors[0]
+
+        ego_speed_mps = _kph_to_mps(self.ego_speed_kph)
+        vru_speed_mps = _kph_to_mps(self.vru_speed_kph)
+
+        root = py_trees.composites.Sequence(name="VRU_Root")
+
+        # 1) Ensure transforms are set at start
+        root.add_child(ActorTransformSetter(ego, self.ego_spawn_transform))
+        root.add_child(ActorTransformSetter(vru, self.vru_spawn_transform))
+
+        # 2) Trigger condition: prefer TTC if provided, else use distance
+        # NOTE: LLM should pick one by filling the other as None/null.
+        if self.ttc_trigger_s is not None:
+            trigger = InTimeToArrivalToVehicle(
+                other_actor=vru,
+                ego_vehicle=ego,
+                time=float(self.ttc_trigger_s)
+            )
+        else:
+            trigger = InTriggerDistanceToVehicle(
+                other_actor=vru,
+                ego_vehicle=ego,
+                distance=float(self.trigger_distance_m)
+            )
+
+        root.add_child(trigger)
+
+        # 3) Ego motion (simple follower; if your stack uses external control, LLM may set speed low or use Idle)
+        # WaypointFollower expects the actor to be a vehicle. This is for ego only.
+        root.add_child(WaypointFollower(ego, ego_speed_mps))
+
+        # 4) VRU motion:
+        # If VRU is a vehicle (bicycle), we can use WaypointFollower.
+        # If VRU is a walker, the LLM should keep vru_blueprint consistent with vehicle/walker support.
+        root.add_child(WaypointFollower(vru, vru_speed_mps))
+
+        # 5) Let scenario run for a fixed duration after trigger to complete interaction
+        root.add_child(Idle(duration=float({{ post_trigger_duration_s }})))
+
+        return root
+
+    def _create_test_criteria(self):
+        """
+        Minimal evaluation criteria:
+        - Collision test between ego and other actors
+        You can add more criteria later via atoms.
+        """
+        criteria = []
+        if self.criteria_enable:
+            criteria.append(CollisionTest(self.ego_vehicles[0]))
+        return criteria
+
+    def __del__(self):
+        """
+        Cleanup handled by ScenarioRunner / BasicScenario
+        """
+        pass
