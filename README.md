@@ -17,7 +17,7 @@ The system performs an end-to-end pipeline:
 ---
 ##  Project Structure
 
-
+```bash
 clean_euro/
 │
 ├── EuroNcap/                      # Input PDFs
@@ -53,7 +53,7 @@ clean_euro/
 │   ├── screen6_carla_launcher.py
 │   └── ui_utils.py
 ---
-
+```
 ## Setup (Linux)
 
 ### 1. Clone the Repository
