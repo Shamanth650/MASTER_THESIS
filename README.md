@@ -58,8 +58,8 @@ clean_euro/
 
 ### 1. Clone the Repository
 
-git clone <your-repo-link>
-cd <your-repo-folder>
+git clone https://github.com/Shamanth650/MASTER_THESIS.git
+
 
 ### 2. Create Virtual Environment
 python3 -m venv venv
