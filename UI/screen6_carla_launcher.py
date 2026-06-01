@@ -33,14 +33,23 @@ def show():
         os.path.join(CARLA_ROOT, "PythonAPI"),
     ]))
 
+    #CARLA_CMD = [
+     ##   os.path.join(CARLA_ROOT, "CarlaUE4.sh"),
+        #"-RenderOffScreen",
+     #   "-quality-level=Low",
+     #   "-no-rendering",
+     #   "-benchmark",
+      #  "-fps=15"
+    #]
+    
     CARLA_CMD = [
         os.path.join(CARLA_ROOT, "CarlaUE4.sh"),
-        #"-RenderOffScreen",
-        "-quality-level=Low",
-        "-benchmark",
-        "-fps=15"
+        "-quality-level=Epic",
+        "-fps=60",
+        "-windowed",
+        "-ResX=1280",
+        "-ResY=720",
     ]
-
     defaults = {
         "carla_process": None,
         "scenario_process": None,
