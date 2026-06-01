@@ -17,8 +17,8 @@ _log_buffers = {
 }
 
 def show():
-    CARLA_ROOT = os.path.expanduser("~/carla")
-    SCENARIO_RUNNER_ROOT = os.path.expanduser("~/scenario_runner")
+    CARLA_ROOT = "/home/trishan"
+    SCENARIO_RUNNER_ROOT = "/home/trishan/Desktop/shamanth_mtech/scenario_runner"
     eggs = glob.glob(os.path.join(CARLA_ROOT, "PythonAPI/carla/dist/*py3*.egg"))
     CARLA_EGG = eggs[0] if eggs else None
     PYTHONPATH_EXTRA = ":".join(filter(None, [
@@ -41,7 +41,6 @@ def show():
         "-quality-level=Low",
         "-carla-server",
         "-fps=20",
-        
     ]
 
     defaults = {
@@ -93,9 +92,9 @@ def show():
         _log_buffers["scenario_logs"] = []
         cmd = [
             "bash", "-c",
-            f'source ~/carla/venv37/bin/activate && '
-            f'export PYTHONPATH=~/carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg:~/carla/PythonAPI/carla:~/carla/PythonAPI && '
-            f'cd ~/scenario_runner && '
+            f'source /home/trishan/Desktop/shamanth_mtech/venv37/bin/activate && '
+            f'export PYTHONPATH=/home/trishan/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg:/home/trishan/PythonAPI/carla:/home/trishan/PythonAPI && '
+            f'cd /home/trishan/Desktop/shamanth_mtech/scenario_runner && '
             f'python3.7 scenario_runner.py --openscenario "{xosc_path}" --host 127.0.0.1 --port 2000 --timeout 60 --output --repetitions 3'
         ]
         proc = subprocess.Popen(
