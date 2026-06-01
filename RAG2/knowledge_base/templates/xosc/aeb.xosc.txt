@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- ================================
-     AEB OpenSCENARIO Template (v2 - null-friendly & complete)
+     AEB OpenSCENARIO Template (v3 - CARLA ScenarioRunner compatible)
      Family: AEB
      Output: OpenSCENARIO (.xosc)
      NOTE:
@@ -8,65 +8,77 @@
      - Only placeholders must be filled by the final LLM.
      - Placeholders use Jinja-style: {{ field_name }}
      - Nulls are VALID in input; LLM must apply safe defaults when values are null.
+
+     CRITICAL RULES FOR LLM:
+     - date MUST be "2020-03-20T12:00:00" — never just a date without time
+     - Map MUST be Town01 with SceneGraphFile filepath=""
+     - Entity names MUST be "hero" and "adversary"
+     - hero vehicle MUST be vehicle.lincoln.mkz_2017 (underscore before 2017)
+     - adversary vehicle MUST be vehicle.tesla.model3
+     - maxAcceleration MUST be 200
+     - SimulationTimeCondition MUST be 0.1 everywhere
+     - hero position MUST be WorldPosition x="299.4" y="133.2" z="0.3" h="0.0"
+     - adversary position MUST be RelativeRoadPosition entityRef="hero" ds=initial_gap dt="0.0"
+     - ALWAYS include EnvironmentAction in Init
+     - ALWAYS include AEB braking trigger on hero
+     - Global StopTrigger MUST use criteria_CollisionTest pattern
      ================================ -->
 
-<OpenSCENARIO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xsi:noNamespaceSchemaLocation="OpenSCENARIO.xsd">
+<OpenSCENARIO>
 
   <!-- GENERATED_BY: {{ generated_by }} -->
 
   <FileHeader revMajor="1" revMinor="0"
-              date="{{ file_date }}"
+              date="2020-03-20T12:00:00"
               description="{{ scenario_name }}"
-              author="{{ author }}"/>
+              author=""/>
 
   <ParameterDeclarations>
-    <!-- Optional: keep empty or add parameters later -->
+    <ParameterDeclaration name="heroSpeed" parameterType="double" value="{{ ego_speed_mps }}"/>
   </ParameterDeclarations>
 
-  <CatalogLocations>
-    <!-- Keep empty unless catalogs are explicitly used -->
-  </CatalogLocations>
+  <CatalogLocations/>
 
   <RoadNetwork>
-    <!-- Do NOT hardcode logic.xodr; fill only if provided -->
-    <LogicFile filepath="{{ logic_file_path }}"/>
-    <SceneGraphFile filepath="{{ scene_graph_file_path }}"/>
+    <LogicFile filepath="Town01"/>
+    <SceneGraphFile filepath=""/>
   </RoadNetwork>
 
   <Entities>
-    <ScenarioObject name="ego">
-      <Vehicle name="{{ ego_vehicle_name }}" vehicleCategory="{{ ego_vehicle_category }}">
+    <ScenarioObject name="hero">
+      <Vehicle name="vehicle.lincoln.mkz_2017" vehicleCategory="car">
+        <ParameterDeclarations/>
+        <Performance maxSpeed="69.444" maxAcceleration="200" maxDeceleration="10.0"/>
         <BoundingBox>
-          <Center x="{{ ego_bb_center_x }}" y="{{ ego_bb_center_y }}" z="{{ ego_bb_center_z }}"/>
-          <Dimensions width="{{ ego_bb_width }}" length="{{ ego_bb_length }}" height="{{ ego_bb_height }}"/>
+          <Center x="1.5" y="0.0" z="0.9"/>
+          <Dimensions width="2.1" length="4.5" height="1.8"/>
         </BoundingBox>
-        <Performance maxSpeed="{{ ego_perf_max_speed }}" maxAcceleration="{{ ego_perf_max_accel }}" maxDeceleration="{{ ego_perf_max_decel }}"/>
         <Axles>
-          <FrontAxle maxSteering="{{ ego_front_max_steer }}" wheelDiameter="{{ ego_front_wheel_diam }}" trackWidth="{{ ego_front_track }}" positionX="{{ ego_front_pos_x }}" positionZ="{{ ego_front_pos_z }}"/>
-          <RearAxle maxSteering="{{ ego_rear_max_steer }}" wheelDiameter="{{ ego_rear_wheel_diam }}" trackWidth="{{ ego_rear_track }}" positionX="{{ ego_rear_pos_x }}" positionZ="{{ ego_rear_pos_z }}"/>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
+          <RearAxle maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
         </Axles>
         <Properties>
-          <!-- CARLA blueprint -->
-          <Property name="model" value="{{ ego_blueprint }}"/>
+          <Property name="type" value="ego_vehicle"/>
+          <Property name="role_name" value="hero"/>
         </Properties>
       </Vehicle>
     </ScenarioObject>
 
-    <ScenarioObject name="target">
-      <Vehicle name="{{ target_vehicle_name }}" vehicleCategory="{{ target_vehicle_category }}">
+    <ScenarioObject name="adversary">
+      <Vehicle name="vehicle.tesla.model3" vehicleCategory="car">
+        <ParameterDeclarations/>
+        <Performance maxSpeed="69.444" maxAcceleration="200" maxDeceleration="10.0"/>
         <BoundingBox>
-          <Center x="{{ target_bb_center_x }}" y="{{ target_bb_center_y }}" z="{{ target_bb_center_z }}"/>
-          <Dimensions width="{{ target_bb_width }}" length="{{ target_bb_length }}" height="{{ target_bb_height }}"/>
+          <Center x="1.5" y="0.0" z="0.9"/>
+          <Dimensions width="2.1" length="4.5" height="1.8"/>
         </BoundingBox>
-        <Performance maxSpeed="{{ target_perf_max_speed }}" maxAcceleration="{{ target_perf_max_accel }}" maxDeceleration="{{ target_perf_max_decel }}"/>
         <Axles>
-          <FrontAxle maxSteering="{{ target_front_max_steer }}" wheelDiameter="{{ target_front_wheel_diam }}" trackWidth="{{ target_front_track }}" positionX="{{ target_front_pos_x }}" positionZ="{{ target_front_pos_z }}"/>
-          <RearAxle maxSteering="{{ target_rear_max_steer }}" wheelDiameter="{{ target_rear_wheel_diam }}" trackWidth="{{ target_rear_track }}" positionX="{{ target_rear_pos_x }}" positionZ="{{ target_rear_pos_z }}"/>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
+          <RearAxle maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
         </Axles>
         <Properties>
-          <!-- CARLA blueprint -->
-          <Property name="model" value="{{ target_blueprint }}"/>
+          <Property name="type" value="simulation"/>
+          <Property name="role_name" value="adversary"/>
         </Properties>
       </Vehicle>
     </ScenarioObject>
@@ -76,54 +88,30 @@
     <Init>
       <Actions>
 
-        <!-- ========= Placement =========
-             Preferred: LanePosition (deterministic on Town maps)
-             Fallback: WorldPosition
-             LLM must fill:
-               - If lane position info is available or can be defaulted, use LanePosition.
-               - Else, use WorldPosition.
-             NOTE: This template includes BOTH blocks but one must be neutralized by filling the unused one with safe defaults
-                   AND setting the other as the actual intended values.
-        -->
+        <!-- Environment: always include -->
+        <GlobalAction>
+          <EnvironmentAction>
+            <Environment name="Environment1">
+              <TimeOfDay animation="false" dateTime="2020-03-20T12:00:00"/>
+              <Weather cloudState="free">
+                <Sun intensity="0.85" azimuth="0" elevation="1.31"/>
+                <Fog visualRange="100000.0"/>
+                <Precipitation precipitationType="dry" intensity="0.0"/>
+              </Weather>
+              <RoadCondition frictionScaleFactor="1.0"/>
+            </Environment>
+          </EnvironmentAction>
+        </GlobalAction>
 
-        <!-- Place ego -->
-        <Private entityRef="ego">
+        <!-- Place hero at verified Town01 spawn point heading east -->
+        <Private entityRef="hero">
           <PrivateAction>
             <TeleportAction>
               <Position>
-
-                <!-- LanePosition (preferred) -->
-                <LanePosition roadId="{{ ego_road_id }}" laneId="{{ ego_lane_id }}" s="{{ ego_s }}" offset="{{ ego_lane_offset }}"/>
-
-                <!-- WorldPosition (fallback) -->
-                <WorldPosition x="{{ ego_spawn_x }}" y="{{ ego_spawn_y }}" z="{{ ego_spawn_z }}"
-                               h="{{ ego_spawn_yaw }}" p="{{ ego_spawn_pitch }}" r="{{ ego_spawn_roll }}"/>
-
+                <WorldPosition x="299.4" y="133.2" z="0.3" h="0.0"/>
               </Position>
             </TeleportAction>
           </PrivateAction>
-        </Private>
-
-        <!-- Place target -->
-        <Private entityRef="target">
-          <PrivateAction>
-            <TeleportAction>
-              <Position>
-
-                <!-- LanePosition (preferred): target ahead by initial_gap_m / initial_distance_m -->
-                <LanePosition roadId="{{ target_road_id }}" laneId="{{ target_lane_id }}" s="{{ target_s }}" offset="{{ target_lane_offset }}"/>
-
-                <!-- WorldPosition (fallback) -->
-                <WorldPosition x="{{ target_spawn_x }}" y="{{ target_spawn_y }}" z="{{ target_spawn_z }}"
-                               h="{{ target_spawn_yaw }}" p="{{ target_spawn_pitch }}" r="{{ target_spawn_roll }}"/>
-
-              </Position>
-            </TeleportAction>
-          </PrivateAction>
-        </Private>
-
-        <!-- Set initial ego speed -->
-        <Private entityRef="ego">
           <PrivateAction>
             <LongitudinalAction>
               <SpeedAction>
@@ -136,8 +124,15 @@
           </PrivateAction>
         </Private>
 
-        <!-- Set initial target speed -->
-        <Private entityRef="target">
+        <!-- Place adversary relative to hero by initial_gap_m ahead -->
+        <Private entityRef="adversary">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <RelativeRoadPosition entityRef="hero" ds="{{ initial_gap_m }}" dt="{{ lateral_offset_m }}"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
           <PrivateAction>
             <LongitudinalAction>
               <SpeedAction>
@@ -156,91 +151,157 @@
     <Story name="AEB_Story">
       <Act name="AEB_Act">
 
-        <!-- Optional target braking event.
-             If not applicable, set target_brake_enable = false and the trigger will never fire.
-        -->
-        <ManeuverGroup name="Target_ManeuverGroup" maximumExecutionCount="1">
+        <!-- Hero ManeuverGroup: drives at speed then AEB brakes -->
+        <ManeuverGroup maximumExecutionCount="1" name="Hero_ManeuverGroup">
           <Actors selectTriggeringEntities="false">
-            <EntityRef entityRef="target"/>
+            <EntityRef entityRef="hero"/>
           </Actors>
 
-          <Maneuver name="Target_Maneuver">
-            <Event name="Target_Event" priority="overwrite">
+          <Maneuver name="Hero_Maneuver">
 
-              <Action name="Target_Brake_Action">
+            <!-- Event 1: Hero drives at constant speed -->
+            <Event name="Hero_Drive_Event" priority="overwrite">
+              <Action name="Hero_Drive_Action">
                 <PrivateAction>
                   <LongitudinalAction>
                     <SpeedAction>
-                      <SpeedActionDynamics dynamicsShape="linear"
-                                           value="{{ target_brake_dynamics_value }}"
-                                           dynamicsDimension="{{ target_brake_dynamics_dimension }}"/>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
                       <SpeedActionTarget>
-                        <AbsoluteTargetSpeed value="{{ target_speed_after_brake_mps }}"/>
+                        <AbsoluteTargetSpeed value="{{ ego_speed_mps }}"/>
                       </SpeedActionTarget>
                     </SpeedAction>
                   </LongitudinalAction>
                 </PrivateAction>
               </Action>
-
-              <!-- ========= Trigger selection (ONE active) =========
-                   trigger_type must be one of:
-                     START_IMMEDIATELY | TTC | DISTANCE
-                   LLM must ensure only the matching condition is active.
-              -->
               <StartTrigger>
                 <ConditionGroup>
-
-                  <!-- START_IMMEDIATELY: fire at time > 0 -->
-                  <Condition name="StartImmediately" delay="0" conditionEdge="rising">
+                  <Condition name="HeroDriveStart" delay="0" conditionEdge="rising">
                     <ByValueCondition>
-                      <SimulationTimeCondition value="{{ start_time_s }}" rule="greaterThan"/>
+                      <SimulationTimeCondition value="0.1" rule="greaterThan"/>
                     </ByValueCondition>
                   </Condition>
-
-                  <!-- TTC trigger -->
-                  <Condition name="TTC_Trigger" delay="0" conditionEdge="rising">
-                    <ByEntityCondition>
-                      <TriggeringEntities triggeringEntitiesRule="any">
-                        <EntityRef entityRef="ego"/>
-                      </TriggeringEntities>
-                      <EntityCondition>
-                        <TimeToCollisionCondition value="{{ ttc_trigger_s }}" rule="lessThan">
-                          <TimeToCollisionConditionTarget>
-                            <EntityRef entityRef="target"/>
-                          </TimeToCollisionConditionTarget>
-                        </TimeToCollisionCondition>
-                      </EntityCondition>
-                    </ByEntityCondition>
-                  </Condition>
-
-                  <!-- DISTANCE trigger -->
-                  <Condition name="Distance_Trigger" delay="0" conditionEdge="rising">
-                    <ByEntityCondition>
-                      <TriggeringEntities triggeringEntitiesRule="any">
-                        <EntityRef entityRef="ego"/>
-                      </TriggeringEntities>
-                      <EntityCondition>
-                        <RelativeDistanceCondition value="{{ trigger_distance_m }}" rule="lessThan"
-                          relativeDistanceType="euclideanDistance" freespace="true">
-                          <EntityRef entityRef="target"/>
-                        </RelativeDistanceCondition>
-                      </EntityCondition>
-                    </ByEntityCondition>
-                  </Condition>
-
                 </ConditionGroup>
               </StartTrigger>
-
             </Event>
+
+            <!-- Event 2: AEB brakes when hero is within 12m of adversary -->
+            <Event name="AEB_Brake_Event" priority="overwrite">
+              <Action name="AEB_Brake_Action">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="10.0" dynamicsDimension="distance"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="0.0"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="AEB_Trigger" delay="0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="hero"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <RelativeDistanceCondition
+                          entityRef="adversary"
+                          relativeDistanceType="longitudinal"
+                          value="12.0"
+                          freespace="true"
+                          rule="lessThan"/>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+
           </Maneuver>
         </ManeuverGroup>
 
-        <!-- Act ends after a fixed duration -->
+        <!-- Adversary ManeuverGroup: stays at target speed throughout -->
+        <ManeuverGroup maximumExecutionCount="1" name="Adversary_ManeuverGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="adversary"/>
+          </Actors>
+
+          <Maneuver name="Adversary_Maneuver">
+
+            <!-- Event 1: Adversary maintains target speed -->
+            <Event name="Adversary_Speed_Event" priority="overwrite">
+              <Action name="Adversary_Speed_Action">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="{{ target_speed_mps }}"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="AdversaryStart" delay="0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="0.1" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+
+            <!-- Event 2: Optional adversary braking (for CCRb variant)
+                 LLM: include this event only if target_brake_dynamics_value is provided.
+                 If target_speed_mps == 0 (stationary), omit this event entirely. -->
+            <Event name="Adversary_Brake_Event" priority="overwrite">
+              <Action name="Adversary_Brake_Action">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear"
+                                           value="{{ target_brake_dynamics_value }}"
+                                           dynamicsDimension="rate"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="0.0"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="AdversaryBrakeTrigger" delay="0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="{{ target_brake_trigger_time_s }}" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+
+          </Maneuver>
+        </ManeuverGroup>
+
+        <StartTrigger>
+          <ConditionGroup>
+            <Condition name="ActStart" delay="0" conditionEdge="rising">
+              <ByValueCondition>
+                <SimulationTimeCondition value="0.1" rule="greaterThan"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StartTrigger>
+
         <StopTrigger>
           <ConditionGroup>
-            <Condition name="Act_End_Time" delay="0" conditionEdge="rising">
+            <Condition name="ActTimeout" delay="0" conditionEdge="rising">
               <ByValueCondition>
-                <SimulationTimeCondition value="{{ post_trigger_duration_s }}" rule="greaterThan"/>
+                <SimulationTimeCondition value="{{ timeout_s }}" rule="greaterThan"/>
               </ByValueCondition>
             </Condition>
           </ConditionGroup>
@@ -249,12 +310,17 @@
       </Act>
     </Story>
 
-    <!-- Scenario hard timeout -->
+    <!-- Global StopTrigger: MUST use criteria pattern -->
     <StopTrigger>
       <ConditionGroup>
-        <Condition name="Scenario_End_Timeout" delay="0" conditionEdge="rising">
+        <Condition name="criteria_CollisionTest" delay="0" conditionEdge="rising">
           <ByValueCondition>
-            <SimulationTimeCondition value="{{ timeout_s }}" rule="greaterThan"/>
+            <ParameterCondition parameterRef="" value="" rule="lessThan"/>
+          </ByValueCondition>
+        </Condition>
+        <Condition name="criteria_DrivenDistanceTest" delay="0" conditionEdge="rising">
+          <ByValueCondition>
+            <ParameterCondition parameterRef="distance_success" value="100" rule="lessThan"/>
           </ByValueCondition>
         </Condition>
       </ConditionGroup>
