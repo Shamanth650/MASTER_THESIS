@@ -2,7 +2,6 @@
 screen6_carla_launcher.py
 Streamlit page for launching CARLA and ScenarioRunner automatically.
 """
-
 import subprocess
 import threading
 import time
@@ -11,22 +10,17 @@ import signal
 import glob
 import streamlit as st
 
-
 # Module-level log buffers — safe to write from background threads
 _log_buffers = {
     "carla_logs": [],
     "scenario_logs": [],
 }
 
-
 def show():
-
-    CARLA_ROOT = os.path.expanduser("~/CARLA_0.9.15")
+    CARLA_ROOT = os.path.expanduser("~/carla")
     SCENARIO_RUNNER_ROOT = os.path.expanduser("~/scenario_runner")
-
     eggs = glob.glob(os.path.join(CARLA_ROOT, "PythonAPI/carla/dist/*py3*.egg"))
     CARLA_EGG = eggs[0] if eggs else None
-
     PYTHONPATH_EXTRA = ":".join(filter(None, [
         CARLA_EGG,
         os.path.join(CARLA_ROOT, "PythonAPI/carla"),
@@ -34,22 +28,22 @@ def show():
     ]))
 
     #CARLA_CMD = [
-     ##   os.path.join(CARLA_ROOT, "CarlaUE4.sh"),
-        #"-RenderOffScreen",
-     #   "-quality-level=Low",
-     #   "-no-rendering",
-     #   "-benchmark",
-      #  "-fps=15"
+    ##   os.path.join(CARLA_ROOT, "CarlaUE4.sh"),
+    #"-RenderOffScreen",
+    #   "-quality-level=Low",
+    #   "-no-rendering",
+    #   "-benchmark",
+    #  "-fps=15"
     #]
-    
+
     CARLA_CMD = [
         os.path.join(CARLA_ROOT, "CarlaUE4.sh"),
-        "-quality-level=Epic",
-        "-fps=60",
-        "-windowed",
-        "-ResX=1280",
-        "-ResY=720",
+        "-quality-level=Low",
+        "-carla-server",
+        "-fps=20",
+        
     ]
+
     defaults = {
         "carla_process": None,
         "scenario_process": None,
@@ -57,7 +51,8 @@ def show():
         "scenario_logs": [],
         "carla_status": "stopped",
         "scenario_status": "stopped",
-        "launch_started": False,
+        "carla_launched": False,
+        "scenario_launched": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -66,7 +61,7 @@ def show():
     def stream_logs(process, log_key, status_key, ready_marker=None):
         for line in iter(process.stdout.readline, b""):
             decoded = line.decode("utf-8", errors="replace").rstrip()
-            _log_buffers[log_key].append(decoded)  # write to module-level buffer, thread-safe
+            _log_buffers[log_key].append(decoded)
             if ready_marker and ready_marker in decoded:
                 st.session_state[status_key] = "running"
         rc = process.wait()
@@ -75,7 +70,8 @@ def show():
 
     def launch_carla():
         st.session_state["carla_status"] = "starting"
-        _log_buffers["carla_logs"] = []  # reset buffer
+        st.session_state["carla_launched"] = True
+        _log_buffers["carla_logs"] = []
         env = os.environ.copy()
         proc = subprocess.Popen(
             CARLA_CMD,
@@ -93,21 +89,19 @@ def show():
 
     def launch_scenario(xosc_path):
         st.session_state["scenario_status"] = "starting"
-        _log_buffers["scenario_logs"] = []  # reset buffer
-        env = os.environ.copy()
-        existing_pp = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = PYTHONPATH_EXTRA + (":" + existing_pp if existing_pp else "")
+        st.session_state["scenario_launched"] = True
+        _log_buffers["scenario_logs"] = []
         cmd = [
-            "python", "scenario_runner.py",
-            "--openscenario", xosc_path,
-            "--reloadWorld"
+            "bash", "-c",
+            f'source ~/carla/venv37/bin/activate && '
+            f'export PYTHONPATH=~/carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg:~/carla/PythonAPI/carla:~/carla/PythonAPI && '
+            f'cd ~/scenario_runner && '
+            f'python3.7 scenario_runner.py --openscenario "{xosc_path}" --host 127.0.0.1 --port 2000 --timeout 60 --output --repetitions 3'
         ]
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            env=env,
-            cwd=SCENARIO_RUNNER_ROOT,
             preexec_fn=os.setsid
         )
         st.session_state["scenario_process"] = proc
@@ -129,7 +123,8 @@ def show():
         st.session_state["scenario_status"] = "stopped"
         st.session_state["carla_process"] = None
         st.session_state["scenario_process"] = None
-        st.session_state["launch_started"] = False
+        st.session_state["carla_launched"] = False
+        st.session_state["scenario_launched"] = False
 
     STATUS_ICONS = {
         "stopped": "⚪", "starting": "🟡", "running": "🟢",
@@ -141,7 +136,7 @@ def show():
         st.markdown(f"**{label}:** {icon} `{status.upper()}`")
 
     st.title("🚗 Launch in CARLA")
-    st.markdown("Automates launching CARLA and running the generated scenario in ScenarioRunner.")
+    st.markdown("Launch CARLA first, then run your generated scenario in ScenarioRunner.")
     st.divider()
 
     st.subheader("📁 Scenario File")
@@ -153,45 +148,63 @@ def show():
         ),
         help="Full path to the OpenSCENARIO file generated by your RAG system"
     )
-    st.divider()
 
+    st.divider()
     st.subheader("📊 Status")
     col1, col2 = st.columns(2)
     with col1:
         status_badge("CARLA Simulator", st.session_state["carla_status"])
     with col2:
         status_badge("Scenario Runner", st.session_state["scenario_status"])
-    st.divider()
 
+    st.divider()
     st.subheader("🎮 Controls")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("🚀 Launch CARLA + Scenario", type="primary", use_container_width=True,
-                     disabled=st.session_state["launch_started"]):
-            if not os.path.exists(xosc_path):
-                st.error(f"❌ XOSC file not found: {xosc_path}")
-            else:
-                st.session_state["launch_started"] = True
-                launch_carla()
-                with st.spinner("⏳ Waiting for CARLA to start (30s)..."):
-                    time.sleep(30)
-                launch_scenario(xosc_path)
-                st.rerun()
-
-    with col2:
-        if st.button("🔄 Refresh Status", use_container_width=True):
+        if st.button(
+            "🚀 Launch CARLA",
+            type="primary",
+            use_container_width=True,
+            disabled=st.session_state["carla_launched"]
+        ):
+            launch_carla()
+            st.success("✅ CARLA is starting...")
             st.rerun()
 
+    with col2:
+        carla_running = st.session_state["carla_status"] in ("running", "starting")
+        if st.button(
+            "🏁 Run Scenario",
+            type="primary",
+            use_container_width=True,
+            disabled=st.session_state["scenario_launched"]
+        ):
+            if not os.path.exists(xosc_path):
+                st.error(f"❌ XOSC file not found: {xosc_path}")
+            elif st.session_state["carla_status"] == "stopped":
+                st.warning("⚠️ Please launch CARLA first!")
+            else:
+                launch_scenario(xosc_path)
+                st.success("✅ Scenario started!")
+                st.rerun()
+
     with col3:
-        if st.button("🛑 Stop All", type="secondary", use_container_width=True,
-                     disabled=not st.session_state["launch_started"]):
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.rerun()
+
+    with col4:
+        if st.button(
+            "🛑 Stop All",
+            type="secondary",
+            use_container_width=True,
+            disabled=not (st.session_state["carla_launched"] or st.session_state["scenario_launched"])
+        ):
             stop_all()
             st.success("All processes stopped.")
             st.rerun()
 
     st.divider()
-
     st.subheader("📋 Live Logs")
     log_col1, log_col2 = st.columns(2)
 
@@ -209,8 +222,8 @@ def show():
         if scenario_logs:
             st.code("\n".join(scenario_logs[-50:]), language="bash")
         else:
-            st.info("No logs yet. Scenario will start after CARLA is ready.")
+            st.info("No logs yet. Run Scenario to see output.")
 
-    if st.session_state["launch_started"]:
+    if st.session_state["carla_launched"] or st.session_state["scenario_launched"]:
         time.sleep(2)
         st.rerun()
