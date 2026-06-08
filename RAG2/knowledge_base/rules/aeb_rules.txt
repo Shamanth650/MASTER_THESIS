@@ -1,7 +1,8 @@
 # ================================
-# AEB RULE PACK (v4 – CARLA ScenarioRunner compatible)
+# AEB RULE PACK (v4 – CARLA ScenarioRunner VALIDATED)
 # Family: AEB
 # Purpose: Guidance for code generation (Python + XOSC)
+# Validated: CARLA 0.9.15 / ScenarioRunner 0.9.16 / Town01
 # ================================
 
 [GENERAL]
@@ -60,11 +61,10 @@
   - <Storyboard> with <Story>, <Act>, <ManeuverGroup>, <Maneuver>, <Event>
   - <GlobalAction><EnvironmentAction> block in Init with weather/sun/fog/precipitation
 - Entity naming:
-  - Use stable names: "hero" for ego vehicle, "adversary" for target vehicle, "vru" (if present).
+  - Use stable names: "hero" for ego vehicle, "adversary" for target vehicle.
 - Vehicle blueprints:
   - hero MUST use: vehicle.lincoln.mkz_2017 (underscore before 2017, not mkz2017)
   - adversary MUST use: vehicle.tesla.model3
-  - bicyclist MUST use: vehicle.bh.crossbike with vehicleCategory="bicycle"
 - Vehicle properties MUST include both:
   - <Property name="type" value="ego_vehicle"/> for hero
   - <Property name="role_name" value="hero"/> for hero
@@ -73,81 +73,100 @@
 - Performance values MUST be:
   - maxSpeed="69.444" maxAcceleration="200" maxDeceleration="10.0"
 - FileHeader date MUST be full datetime format: date="2020-03-20T12:00:00"
-- Init phase MUST include:
-  - LanePosition for hero and adversary (see Placement rules below)
-  - AbsoluteTargetSpeed for each entity MUST be value="0.0" in Init phase.
-  - Speed ramping MUST happen in Story ManeuverGroup only.
-- Placement rules:
-  - ALWAYS use LanePosition — WorldPosition and RelativeRoadPosition cause off-road spawning in CARLA Town01.
-  - NEVER use WorldPosition or RelativeRoadPosition for entity spawning.
-  - Verified spawn positions for Town01:
 
-    REAR SCENARIOS (CCRs, CCRm, CCRb):
-    - Hero (behind, approaching):
-      <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
-    - Adversary (ahead):
-      <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
-    - For CCRs (hero moves toward stationary adversary ahead):
-      - Hero (behind, moving):
-        <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
-      - Adversary (ahead, stationary):
-        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
+[XOSC / SPAWN POSITIONS — CRITICAL]
+- ALWAYS use LanePosition for ALL entities. NEVER use WorldPosition or RelativeRoadPosition.
+- WorldPosition causes river/off-road spawns in Town01. RelativeRoadPosition causes off-road spawns.
+- LanePosition is the ONLY spawn method validated to work in CARLA 0.9.15 Town01.
 
-    FRONT CROSSING SCENARIOS (CCFtap, CCFtab):
-    - Hero:
-      <LanePosition roadId="4" laneId="-1" offset="0.0" s="197.98" />
-    - Adversary/Bicyclist:
-      <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
+- CCR scenarios (CCRs, CCRm, CCRb) — both on same straight road:
+  - hero:     LanePosition roadId="12" laneId="-1" s="156.84" offset="0.0"
+  - adversary: LanePosition roadId="12" laneId="-1" s="193.66" offset="0.0"
 
-    HEAD-ON SCENARIOS (CCFhos, CCFhol, CCFho):
-    - Hero:
-      <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
-    - Adversary (opposite lane, opposite direction):
-      <LanePosition roadId="12" laneId="1" offset="0.0" s="193.66" />
+- CCFtap / CCFtab — perpendicular roads (junction):
+  - hero:     LanePosition roadId="4"  laneId="-1" s="197.98" offset="0.0"
+  - adversary: LanePosition roadId="12" laneId="-1" s="193.66" offset="0.0"
 
-  - overlap_percent is OPTIONAL; ignore if null.
+- CCFhos (head-on straight) — opposite lanes:
+  - hero:     LanePosition roadId="12" laneId="-1" s="156.84" offset="0.0"
+  - adversary: LanePosition roadId="12" laneId="1"  s="193.66" offset="0.0"
 
-- Speed settings per scenario:
-  - Rear scenarios (CCRs, CCRm, CCRb):
-    - heroSpeed: 8.0 m/s
-    - adversarySpeed: 0.0 m/s (CCRs), 3.0 m/s (CCRm), 8.0 m/s (CCRb)
-  - Front crossing scenarios (CCFtap, CCFtab):
-    - heroSpeed: 10.0 m/s
-    - adversarySpeed: 3.0 m/s
-  - Head-on scenarios (CCFhos, CCFhol, CCFho):
-    - heroSpeed: 8.0 m/s
-    - adversarySpeed: 8.0 m/s
+- CCFhol (head-on lane change) — adversary starts opposite lane, changes into hero lane:
+  - hero:     LanePosition roadId="12" laneId="-1" s="156.84" offset="0.0"
+  - adversary: LanePosition roadId="12" laneId="1"  s="193.66" offset="0.0"
+  - adversary uses FollowTrajectoryAction (NOT LaneChangeAction — causes segfault in CARLA 0.9.15)
 
-- Story SpeedAction dynamics MUST always use:
+- Init speed MUST be 0.0 for ALL entities in Init phase.
+- Speed ramp MUST only happen in Story/Act ManeuverGroup, NEVER in Init.
+
+[XOSC / SPEED RAMP]
+- Hero and adversary accelerate in Story using SpeedAction:
   - dynamicsShape="linear" value="3.0" dynamicsDimension="time"
-  - DO NOT use dynamicsShape="step" in Story ManeuverGroup events.
+  - Triggered by SimulationTimeCondition value="1.0" rule="greaterThan"
+- Speed values per scenario (m/s):
+  - CCRs:  hero=8.0,    adversary=0.0
+  - CCRm:  hero=8.0,    adversary=3.0
+  - CCRb:  hero=8.0,    adversary=8.0 (adversary brakes after)
+  - CCFtap: hero=10.0,  adversary=3.0
+  - CCFtab: hero=10.0,  adversary=3.0
+  - CCFhos: hero=8.333, adversary=8.333
+  - CCFhol: hero=8.333, adversary=8.333
 
-- AEB braking MUST be included:
-  - Add AEBBrakeEvent on hero ManeuverGroup.
-  - For rear scenarios (CCRs, CCRm, CCRb):
-    - Trigger: RelativeDistanceCondition entityRef="adversary" relativeDistanceType="longitudinal" value="12.0" freespace="true" rule="lessThan"
-  - For front and head-on scenarios (CCFtap, CCFtab, CCFhos, CCFhol, CCFho):
-    - Trigger: RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance" value="30.0" freespace="true" rule="lessThan"
-  - Action: SpeedAction to 0.0 m/s with dynamicsShape="linear" value="10.0" dynamicsDimension="distance"
+[XOSC / AEB BRAKING]
+- AEB braking MUST be included as a separate ManeuverGroup on hero.
+- CCR scenarios — AEB trigger:
+  - RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+    value="12.0" freespace="false" rule="lessThan"
+- CCF/head-on scenarios — AEB trigger:
+  - RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+    value="20.0" freespace="false" rule="lessThan"
+- AEB brake action (ALL scenarios):
+  - SpeedAction to 0.0 m/s
+  - dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+
+[XOSC / LANE CHANGE (CCFhol only)]
+- NEVER use LaneChangeAction — causes segmentation fault in CARLA 0.9.15.
+- Use FollowTrajectoryAction with Polyline vertices instead.
+- FollowTrajectoryAction REQUIRES TimeReference child element:
+  - <TimeReference><Timing domainAbsoluteRelative="absolute" scale="1.0" offset="0.0"/></TimeReference>
+- Polyline MUST have 4 or more vertices or SR throws IndexError.
+- Example vertices for lane change (laneId=1 → laneId=-1):
+  - Vertex time="0.0": LanePosition roadId="12" laneId="1"  s="193.66" offset="0.0"
+  - Vertex time="1.5": LanePosition roadId="12" laneId="1"  s="188.0"  offset="-1.75"
+  - Vertex time="3.0": LanePosition roadId="12" laneId="-1" s="182.0"  offset="0.0"
+  - Vertex time="10.0": LanePosition roadId="12" laneId="-1" s="170.0" offset="0.0"
+- Both hero AND adversary need separate AEB ManeuverGroups in CCFhol.
+- Lane change triggers when adversary is 35m cartesianDistance from hero.
 
 [XOSC / TRIGGERS]
-- SimulationTimeCondition value MUST always be "1.0" (never "0.1" or "0.0").
-- Trigger must match user_config.trigger.type:
-  - START_IMMEDIATELY → SimulationTimeCondition value="1.0"
-  - TTC → TimeToCollisionCondition
-  - DISTANCE → RelativeDistanceCondition
-- If trigger parameters are null, apply safe defaults instead of failing.
-- Do NOT activate multiple trigger types simultaneously.
+- SimulationTimeCondition value MUST always be "1.0" (NEVER "0.1" or "0.0").
+- Act StartTrigger: SimulationTimeCondition value="1.0" rule="greaterThan"
+- Speed ramp StartTrigger: SimulationTimeCondition value="1.0" rule="greaterThan"
+- WaitGroup StartTrigger: SimulationTimeCondition value="55.0" rule="greaterThan"
+
+[XOSC / WAIT GROUP]
+- ALWAYS add a WaitGroup ManeuverGroup as the last ManeuverGroup in the Act.
+- WaitGroup keeps the Act alive until the 60s timeout fires.
+- Without WaitGroup, SR exits early when all ManeuverGroups complete.
+- WaitGroup triggers at SimulationTimeCondition value="55.0".
+- WaitGroup action: SpeedAction keeping adversary at its current speed.
 
 [XOSC / STOP]
-- ALWAYS include StopTrigger.
-- If timeout_s is null → default to 60s.
-- Global StopTrigger MUST use criteria pattern:
-  - criteria_CollisionTest with ParameterCondition parameterRef="" value="" rule="lessThan"
-  - criteria_DrivenDistanceTest with ParameterCondition parameterRef="distance_success" value="100" rule="lessThan"
+- ALWAYS include StopTrigger in Act: SimulationTimeCondition value="60.0" rule="greaterThan"
+- Global StopTrigger MUST use criteria_CollisionTest ParameterCondition pattern:
+  - <Condition name="criteria_CollisionTest" delay="0.0" conditionEdge="rising">
+      <ByValueCondition>
+        <ParameterCondition parameterRef="criteria_CollisionTest" value="" rule="lessThan"/>
+      </ByValueCondition>
+    </Condition>
+- Do NOT include criteria_DrivenDistanceTest for VRU or short-distance scenarios.
+- criteria_CollisionTest parameterRef MUST be "criteria_CollisionTest" (not empty, not "distance_success").
+- Without criteria_ ParameterCondition in global StopTrigger, SR exits immediately with
+  "Nothing to analyze" error.
 
 [SAFETY / CONSISTENCY]
 - ALWAYS include EnvironmentAction with weather in Init GlobalAction.
 - Do not add traffic, pedestrians, sensors, friction unless explicitly specified.
-- Keep logic minimal: spawn, placement, trigger, behavior, AEB brake, criteria, stop.
+- Keep logic minimal: spawn, placement, trigger, behavior, AEB brake, WaitGroup, criteria, stop.
 - Prefer execution-safe defaults over TODOs or placeholders.
+- roadId values MUST be non-zero integers. laneId MUST be negative for forward travel (-1).
