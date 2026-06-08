@@ -1,196 +1,445 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- ================================
-     VRU OpenSCENARIO Template (v1)
+     VRU OpenSCENARIO Template (v2 - CARLA ScenarioRunner VALIDATED)
      Family: VRU
      Output: OpenSCENARIO (.xosc)
-     NOTE:
-     - This is a TEMPLATE. Do NOT add logic here.
-     - Only placeholders must be filled by the final LLM.
-     - Placeholders use Jinja-style: {{ field_name }}
+     Validated: CARLA 0.9.15 / ScenarioRunner 0.9.16 / Town01
+
+     CRITICAL RULES FOR LLM:
+     - date MUST be "2020-03-20T12:00:00"
+     - Map MUST be Town01 with SceneGraphFile filepath=""
+     - Entity names MUST be "hero" and "adversary" or "pedestrian"
+     - hero vehicle MUST be vehicle.lincoln.mkz_2017
+     - Cyclist adversary MUST be vehicle.bh.crossbike vehicleCategory="bicycle"
+     - Motorcycle adversary MUST be vehicle.kawasaki.ninja vehicleCategory="motorcycle"
+     - Pedestrian entity MUST use <Pedestrian> tag NOT <Vehicle>
+     - maxAcceleration MUST be 200
+     - SimulationTimeCondition MUST be 1.0 everywhere (NEVER 0.1 or 0.0)
+     - ALWAYS use LanePosition for ALL entities (NEVER WorldPosition or RelativeRoadPosition)
+     - Init AbsoluteTargetSpeed MUST be 0.0 for ALL entities
+     - Speed ramp MUST happen in Story ManeuverGroup using linear dynamics
+     - AcquirePositionAction and RoutingAction are BROKEN for pedestrians in SR 0.9.16 — NEVER use them
+     - Pedestrian motion: SpeedAction ONLY
+     - AEB trigger: cartesianDistance value=20.0 freespace=false
+     - AEB brake: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+     - ALWAYS include WaitGroup ManeuverGroup triggering at t=55s
+     - Global StopTrigger MUST use criteria_CollisionTest pattern
+     - criteria_CollisionTest parameterRef MUST be "criteria_CollisionTest"
+     - Do NOT include criteria_DrivenDistanceTest
+
+     VERIFIED SPAWN POSITIONS (Town01):
+     Pedestrian/Cyclist/CMRs/CMRb: hero roadId=12 laneId=-1 s=156.84, adversary roadId=12 laneId=-1 s=193.66
+     CMFtap:      hero roadId=4  laneId=-1 s=197.98, adversary roadId=12 laneId=-1 s=193.66
+     CMoncoming:  hero roadId=12 laneId=-1 s=156.84, adversary roadId=12 laneId=1  s=193.66
+     CMovertaking: hero roadId=12 laneId=-1 s=156.84, adversary roadId=12 laneId=1  s=193.66
+
+     VRU SPEED SETTINGS (m/s):
+     CPFA-50: heroSpeed=13.889, pedestrianSpeed=1.389
+     CPNa-25: heroSpeed=5.556,  pedestrianSpeed=1.389
+     CPNa-50: heroSpeed=8.333,  pedestrianSpeed=1.389
+     CPNa-75: heroSpeed=11.111, pedestrianSpeed=1.389
+     CPLo-25: heroSpeed=5.556,  pedestrianSpeed=1.389
+     CPLo-50: heroSpeed=8.333,  pedestrianSpeed=1.389
+     CPLo-75: heroSpeed=11.111, pedestrianSpeed=1.389
+     CBNa-25: heroSpeed=5.556,  adversarySpeed=4.167
+     CBNa-50: heroSpeed=8.333,  adversarySpeed=4.167
+     CBNa-75: heroSpeed=11.111, adversarySpeed=4.167
+     CBFa-50: heroSpeed=8.333,  adversarySpeed=4.167
+     CMRs:    heroSpeed=8.333,  adversarySpeed=0.0
+     CMRb:    heroSpeed=8.333,  adversarySpeed=8.333
+     CMFtap:  heroSpeed=8.333,  adversarySpeed=8.333
+     CMoncoming:   heroSpeed=8.333, adversarySpeed=8.333
+     CMovertaking: heroSpeed=8.333, adversarySpeed=8.333
      ================================ -->
 
-<OpenSCENARIO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xsi:noNamespaceSchemaLocation="OpenSCENARIO.xsd">
+<OpenSCENARIO>
+
+  <!-- GENERATED_BY: Claude -->
+
   <FileHeader revMajor="1" revMinor="0"
-              date="{{ file_date }}"
+              date="2020-03-20T12:00:00"
               description="{{ scenario_name }}"
-              author="{{ author }}"/>
+              author=""/>
 
   <ParameterDeclarations>
-    <!-- Optional: keep empty or add parameters later -->
+    <ParameterDeclaration name="heroSpeed"     parameterType="double" value="{{ hero_speed_mps }}"/>
+    <ParameterDeclaration name="adversarySpeed" parameterType="double" value="{{ adversary_speed_mps }}"/>
   </ParameterDeclarations>
 
-  <CatalogLocations>
-    <!-- Keep empty unless catalogs are explicitly used -->
-  </CatalogLocations>
+  <CatalogLocations/>
 
   <RoadNetwork>
-    <!-- Do NOT hardcode logic.xodr; fill only if provided -->
-    <LogicFile filepath="{{ logic_file_path }}"/>
-    <SceneGraphFile filepath="{{ scene_graph_file_path }}"/>
+    <LogicFile filepath="Town01"/>
+    <SceneGraphFile filepath=""/>
   </RoadNetwork>
 
   <Entities>
-    <ScenarioObject name="ego">
-      <Vehicle name="{{ ego_vehicle_name }}" vehicleCategory="{{ ego_vehicle_category }}">
+
+    <!-- Hero vehicle — always vehicle.lincoln.mkz_2017 -->
+    <ScenarioObject name="hero">
+      <Vehicle name="vehicle.lincoln.mkz_2017" vehicleCategory="car">
+        <ParameterDeclarations/>
+        <Performance maxSpeed="69.444" maxAcceleration="200" maxDeceleration="10.0"/>
         <BoundingBox>
-          <Center x="{{ ego_bb_center_x }}" y="{{ ego_bb_center_y }}" z="{{ ego_bb_center_z }}"/>
-          <Dimensions width="{{ ego_bb_width }}" length="{{ ego_bb_length }}" height="{{ ego_bb_height }}"/>
+          <Center x="1.5" y="0.0" z="0.9"/>
+          <Dimensions width="2.1" length="4.5" height="1.8"/>
         </BoundingBox>
-        <Performance maxSpeed="{{ ego_perf_max_speed }}" maxAcceleration="{{ ego_perf_max_accel }}" maxDeceleration="{{ ego_perf_max_decel }}"/>
         <Axles>
-          <FrontAxle maxSteering="{{ ego_front_max_steer }}" wheelDiameter="{{ ego_front_wheel_diam }}" trackWidth="{{ ego_front_track }}" positionX="{{ ego_front_pos_x }}" positionZ="{{ ego_front_pos_z }}"/>
-          <RearAxle maxSteering="{{ ego_rear_max_steer }}" wheelDiameter="{{ ego_rear_wheel_diam }}" trackWidth="{{ ego_rear_track }}" positionX="{{ ego_rear_pos_x }}" positionZ="{{ ego_rear_pos_z }}"/>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
+          <RearAxle  maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
         </Axles>
         <Properties>
-          <Property name="type" value="{{ ego_blueprint }}"/>
+          <Property name="type"      value="ego_vehicle"/>
+          <Property name="role_name" value="hero"/>
         </Properties>
       </Vehicle>
     </ScenarioObject>
 
-    <ScenarioObject name="vru">
-      <!-- VRU can be a pedestrian or bicycle. Keep as Pedestrian here; blueprint decides implementation downstream. -->
-      <Pedestrian name="{{ vru_ped_name }}" pedestrianCategory="{{ vru_ped_category }}" mass="{{ vru_mass }}">
+    <!-- VRU adversary — choose ONE of the following based on scenario:
+
+         PEDESTRIAN scenarios (CPFA, CPNa, CPLo, CPNco):
+         <ScenarioObject name="pedestrian">
+           <Pedestrian model="walker.pedestrian.0001" mass="80.0"
+                       name="walker.pedestrian.0001" pedestrianCategory="pedestrian">
+             <ParameterDeclarations/>
+             <BoundingBox>
+               <Center x="0.0" y="0.0" z="0.9"/>
+               <Dimensions width="0.5" length="0.4" height="1.8"/>
+             </BoundingBox>
+             <Properties>
+               <Property name="type"      value="simulation"/>
+               <Property name="role_name" value="pedestrian"/>
+             </Properties>
+           </Pedestrian>
+         </ScenarioObject>
+
+         CYCLIST scenarios (CBNa, CBFa, CBLa, CBTa, CBNao, CBda):
+         <ScenarioObject name="adversary">
+           <Vehicle name="vehicle.bh.crossbike" vehicleCategory="bicycle">
+             ...standard vehicle block...
+             <Properties>
+               <Property name="type"      value="simulation"/>
+               <Property name="role_name" value="adversary"/>
+             </Properties>
+           </Vehicle>
+         </ScenarioObject>
+
+         MOTORCYCLIST scenarios (CMRs, CMRb, CMFtap, CMoncoming, CMovertaking):
+         <ScenarioObject name="adversary">
+           <Vehicle name="vehicle.kawasaki.ninja" vehicleCategory="motorcycle">
+             ...standard vehicle block...
+             <Properties>
+               <Property name="type"      value="simulation"/>
+               <Property name="role_name" value="adversary"/>
+             </Properties>
+           </Vehicle>
+         </ScenarioObject>
+    -->
+    <ScenarioObject name="adversary">
+      <Vehicle name="{{ adversary_blueprint }}" vehicleCategory="{{ adversary_category }}">
+        <ParameterDeclarations/>
+        <Performance maxSpeed="69.444" maxAcceleration="200" maxDeceleration="10.0"/>
         <BoundingBox>
-          <Center x="{{ vru_bb_center_x }}" y="{{ vru_bb_center_y }}" z="{{ vru_bb_center_z }}"/>
-          <Dimensions width="{{ vru_bb_width }}" length="{{ vru_bb_length }}" height="{{ vru_bb_height }}"/>
+          <Center x="1.5" y="0.0" z="0.9"/>
+          <Dimensions width="2.1" length="4.5" height="1.8"/>
         </BoundingBox>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
+          <RearAxle  maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
+        </Axles>
         <Properties>
-          <Property name="type" value="{{ vru_blueprint }}"/>
+          <Property name="type"      value="simulation"/>
+          <Property name="role_name" value="adversary"/>
         </Properties>
-      </Pedestrian>
+      </Vehicle>
     </ScenarioObject>
+
   </Entities>
 
   <Storyboard>
     <Init>
       <Actions>
-        <!-- Place ego -->
-        <Private entityRef="ego">
+
+        <!-- Environment: always include -->
+        <GlobalAction>
+          <EnvironmentAction>
+            <Environment name="Environment1">
+              <TimeOfDay animation="false" dateTime="2020-03-20T12:00:00"/>
+              <Weather cloudState="free">
+                <Sun intensity="0.85" azimuth="0" elevation="1.31"/>
+                <Fog visualRange="100000.0"/>
+                <Precipitation precipitationType="dry" intensity="0.0"/>
+              </Weather>
+              <RoadCondition frictionScaleFactor="1.0"/>
+            </Environment>
+          </EnvironmentAction>
+        </GlobalAction>
+
+        <!-- Hero spawn: LanePosition ONLY — NEVER WorldPosition or RelativeRoadPosition
+             Pedestrian/Cyclist/CMRs/CMRb: roadId=12 laneId=-1 s=156.84
+             CMFtap: roadId=4 laneId=-1 s=197.98 -->
+        <Private entityRef="hero">
           <PrivateAction>
             <TeleportAction>
               <Position>
-                <WorldPosition x="{{ ego_spawn_x }}" y="{{ ego_spawn_y }}" z="{{ ego_spawn_z }}"
-                               h="{{ ego_spawn_yaw }}" p="{{ ego_spawn_pitch }}" r="{{ ego_spawn_roll }}"/>
+                <LanePosition roadId="{{ hero_road_id }}" laneId="{{ hero_lane_id }}"
+                              offset="0.0" s="{{ hero_s }}"/>
               </Position>
             </TeleportAction>
           </PrivateAction>
-        </Private>
-
-        <!-- Place VRU -->
-        <Private entityRef="vru">
-          <PrivateAction>
-            <TeleportAction>
-              <Position>
-                <WorldPosition x="{{ vru_spawn_x }}" y="{{ vru_spawn_y }}" z="{{ vru_spawn_z }}"
-                               h="{{ vru_spawn_yaw }}" p="{{ vru_spawn_pitch }}" r="{{ vru_spawn_roll }}"/>
-              </Position>
-            </TeleportAction>
-          </PrivateAction>
-        </Private>
-
-        <!-- Set initial ego speed -->
-        <Private entityRef="ego">
           <PrivateAction>
             <LongitudinalAction>
               <SpeedAction>
+                <!-- Init speed MUST be 0.0 — speed ramp in Story -->
                 <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
                 <SpeedActionTarget>
-                  <AbsoluteTargetSpeed value="{{ ego_speed_mps }}"/>
+                  <AbsoluteTargetSpeed value="0.0"/>
                 </SpeedActionTarget>
               </SpeedAction>
             </LongitudinalAction>
           </PrivateAction>
         </Private>
 
-        <!-- Keep VRU stationary at init (speed 0) -->
-        <Private entityRef="vru">
+        <!-- Adversary/Pedestrian spawn: LanePosition ONLY
+             Pedestrian/Cyclist/CMRs/CMRb: roadId=12 laneId=-1 s=193.66
+             CMoncoming/CMovertaking: roadId=12 laneId=1 s=193.66 (opposite lane) -->
+        <Private entityRef="adversary">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="{{ adversary_road_id }}" laneId="{{ adversary_lane_id }}"
+                              offset="0.0" s="{{ adversary_s }}"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
           <PrivateAction>
             <LongitudinalAction>
               <SpeedAction>
+                <!-- Init speed MUST be 0.0 -->
                 <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
                 <SpeedActionTarget>
-                  <AbsoluteTargetSpeed value="0"/>
+                  <AbsoluteTargetSpeed value="0.0"/>
                 </SpeedActionTarget>
               </SpeedAction>
             </LongitudinalAction>
           </PrivateAction>
         </Private>
+
       </Actions>
     </Init>
 
     <Story name="VRU_Story">
       <Act name="VRU_Act">
 
-        <ManeuverGroup name="VRU_ManeuverGroup" maximumExecutionCount="1">
+        <!-- ManeuverGroup 1: Hero accelerates to test speed -->
+        <ManeuverGroup maximumExecutionCount="1" name="HeroAccelGroup">
           <Actors selectTriggeringEntities="false">
-            <EntityRef entityRef="vru"/>
+            <EntityRef entityRef="hero"/>
           </Actors>
-
-          <Maneuver name="VRU_Maneuver">
-            <Event name="VRU_Event" priority="overwrite">
-
-              <!-- Start VRU movement on trigger -->
-              <Action name="VRU_Move_Action">
+          <Maneuver name="HeroAccelManeuver">
+            <Event name="HeroAccelEvent" priority="overwrite">
+              <Action name="HeroAccelAction">
                 <PrivateAction>
                   <LongitudinalAction>
                     <SpeedAction>
-                      <SpeedActionDynamics dynamicsShape="linear" value="{{ vru_speed_dynamics_value }}" dynamicsDimension="{{ vru_speed_dynamics_dimension }}"/>
+                      <!-- linear 3.0s ramp — NEVER step in Story -->
+                      <SpeedActionDynamics dynamicsShape="linear" value="3.0" dynamicsDimension="time"/>
                       <SpeedActionTarget>
-                        <AbsoluteTargetSpeed value="{{ vru_speed_mps }}"/>
+                        <AbsoluteTargetSpeed value="$heroSpeed"/>
                       </SpeedActionTarget>
                     </SpeedAction>
                   </LongitudinalAction>
                 </PrivateAction>
               </Action>
-
               <StartTrigger>
                 <ConditionGroup>
-
-                  <!-- Prefer TTC trigger if provided; otherwise distance trigger.
-                       LLM must fill only ONE of these as enabled and set the other to false/disabled. -->
-
-                  <Condition name="TTC_Trigger" delay="0" conditionEdge="rising">
-                    <ByEntityCondition>
-                      <TriggeringEntities triggeringEntitiesRule="any">
-                        <EntityRef entityRef="ego"/>
-                      </TriggeringEntities>
-                      <EntityCondition>
-                        <TimeToCollisionCondition value="{{ ttc_trigger_s }}" rule="lessThan">
-                          <TimeToCollisionConditionTarget>
-                            <EntityRef entityRef="vru"/>
-                          </TimeToCollisionConditionTarget>
-                        </TimeToCollisionCondition>
-                      </EntityCondition>
-                    </ByEntityCondition>
+                  <Condition name="HeroAccelStart" delay="0.0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <!-- MUST be 1.0 — NEVER 0.1 or 0.0 -->
+                      <SimulationTimeCondition value="1.0" rule="greaterThan"/>
+                    </ByValueCondition>
                   </Condition>
-
-                  <Condition name="Distance_Trigger" delay="0" conditionEdge="rising">
-                    <ByEntityCondition>
-                      <TriggeringEntities triggeringEntitiesRule="any">
-                        <EntityRef entityRef="ego"/>
-                      </TriggeringEntities>
-                      <EntityCondition>
-                        <RelativeDistanceCondition value="{{ trigger_distance_m }}" rule="lessThan" relativeDistanceType="euclideanDistance" freespace="true">
-                          <EntityRef entityRef="vru"/>
-                        </RelativeDistanceCondition>
-                      </EntityCondition>
-                    </ByEntityCondition>
-                  </Condition>
-
                 </ConditionGroup>
               </StartTrigger>
-
             </Event>
           </Maneuver>
         </ManeuverGroup>
 
-        <!-- Act ends after a fixed duration -->
+        <!-- ManeuverGroup 2: Adversary/Pedestrian starts moving
+             CRITICAL: Use SpeedAction ONLY for pedestrians
+             NEVER use AcquirePositionAction or RoutingAction — broken in SR 0.9.16
+             Pedestrian trigger: longitudinal distance 40m from hero
+             Cyclist/Motorcycle trigger: SimulationTimeCondition 1.0 -->
+        <ManeuverGroup maximumExecutionCount="1" name="AdversaryWalkGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="adversary"/>
+          </Actors>
+          <Maneuver name="AdversaryWalkManeuver">
+            <Event name="AdversaryWalkEvent" priority="overwrite">
+              <Action name="AdversaryWalkAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="1.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$adversarySpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <!-- Pedestrian: trigger on longitudinal distance 40m
+                       Cyclist/Motorcycle: trigger on SimulationTimeCondition 1.0 -->
+                  <Condition name="AdversaryWalkTrigger" delay="0.0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="hero"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <RelativeDistanceCondition entityRef="adversary"
+                          relativeDistanceType="longitudinal"
+                          value="40.0" freespace="false" rule="lessThan"/>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- ManeuverGroup 3: Hero AEB brakes
+             AEB trigger: cartesianDistance value=20.0 freespace=false
+             AEB brake: linear 3.0s to 0.0 m/s -->
+        <ManeuverGroup maximumExecutionCount="1" name="HeroAEBGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="hero"/>
+          </Actors>
+          <Maneuver name="HeroAEBManeuver">
+            <Event name="HeroAEBEvent" priority="overwrite">
+              <Action name="HeroAEBBrakeAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <!-- AEB brake: linear 3.0s — NEVER value=10.0 distance -->
+                      <SpeedActionDynamics dynamicsShape="linear" value="3.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="0.0"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="HeroAEBTrigger" delay="0.0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="hero"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <!-- ALWAYS cartesianDistance, ALWAYS freespace=false -->
+                        <RelativeDistanceCondition entityRef="adversary"
+                          relativeDistanceType="cartesianDistance"
+                          value="20.0" freespace="false" rule="lessThan"/>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- ManeuverGroup 4: Pedestrian continue walking after hero stops
+             Triggered when hero speed drops below 1.0 m/s
+             Keeps pedestrian walking so scenario looks realistic -->
+        <ManeuverGroup maximumExecutionCount="1" name="PedestrianContinueGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="adversary"/>
+          </Actors>
+          <Maneuver name="PedestrianContinueManeuver">
+            <Event name="PedestrianContinueEvent" priority="overwrite">
+              <Action name="PedestrianContinueAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="1.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$adversarySpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="PedestrianContinueTrigger" delay="0.0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="hero"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <SpeedCondition value="1.0" rule="lessThan"/>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- ManeuverGroup 5: WaitGroup — keeps Act alive until 60s timeout
+             Without this SR exits early when all ManeuverGroups complete -->
+        <ManeuverGroup maximumExecutionCount="1" name="WaitGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="adversary"/>
+          </Actors>
+          <Maneuver name="WaitManeuver">
+            <Event name="WaitEvent" priority="overwrite">
+              <Action name="WaitAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="1.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$adversarySpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="WaitTrigger" delay="0.0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="55.0" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <StartTrigger>
+          <ConditionGroup>
+            <Condition name="ActStartCondition" delay="0.0" conditionEdge="rising">
+              <ByValueCondition>
+                <SimulationTimeCondition value="1.0" rule="greaterThan"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StartTrigger>
+
         <StopTrigger>
           <ConditionGroup>
-            <Condition name="Act_End_Time" delay="0" conditionEdge="rising">
+            <Condition name="ActTimeoutCondition" delay="0.0" conditionEdge="rising">
               <ByValueCondition>
-                <SimulationTimeCondition value="{{ post_trigger_duration_s }}" rule="greaterThan"/>
+                <SimulationTimeCondition value="{{ timeout_s }}" rule="greaterThan"/>
               </ByValueCondition>
             </Condition>
           </ConditionGroup>
@@ -199,14 +448,19 @@
       </Act>
     </Story>
 
+    <!-- Global StopTrigger: criteria_CollisionTest REQUIRED
+         Without this SR exits immediately with "Nothing to analyze"
+         parameterRef MUST be "criteria_CollisionTest" not empty string
+         Do NOT include criteria_DrivenDistanceTest -->
     <StopTrigger>
       <ConditionGroup>
-        <Condition name="Scenario_End_Timeout" delay="0" conditionEdge="rising">
+        <Condition name="criteria_CollisionTest" delay="0.0" conditionEdge="rising">
           <ByValueCondition>
-            <SimulationTimeCondition value="{{ timeout_s }}" rule="greaterThan"/>
+            <ParameterCondition parameterRef="criteria_CollisionTest" value="" rule="lessThan"/>
           </ByValueCondition>
         </Condition>
       </ConditionGroup>
     </StopTrigger>
+
   </Storyboard>
 </OpenSCENARIO>
