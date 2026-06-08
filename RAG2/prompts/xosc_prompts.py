@@ -1,16 +1,14 @@
 """
 RAG2/prompts/xosc_prompts.py
-IMPROVED VERSION v5:
-- Fixed placement rules: LanePosition for all entities (verified Town01 spawn points)
-- Fixed init speed: always 0.0 in Init, $heroSpeed/$adversarySpeed ONLY in Story
-- Fixed SimulationTimeCondition: always 1.0 not 0.1
-- Fixed AEB trigger: longitudinal 12m for rear, cartesianDistance 30m for front
-- Fixed spawn positions consistent across SYSTEM_PROMPT and working example
-- Fixed default speeds: 8.0 m/s not 13.889
-- Correct vehicle blueprints, map, date format, entity names
-- AEB braking trigger included
-- EnvironmentAction included
-- Correct global StopTrigger criteria pattern
+IMPROVED VERSION v6:
+- Fixed CCRs/CCRm/CCRb spawn positions (hero behind at s=156.84, adversary ahead at s=193.66)
+- Fixed AEB brake dynamics (linear value=3.0 dynamicsDimension=time)
+- Removed criteria_DrivenDistanceTest
+- Fixed criteria_CollisionTest parameterRef
+- Added CCFhol FollowTrajectoryAction pattern (LaneChangeAction segfaults in CARLA 0.9.15)
+- Added WaitGroup pattern
+- Added full VRU requirements section
+- Validated: CARLA 0.9.15 / ScenarioRunner 0.9.16 / Town01
 """
 from __future__ import annotations
 import json
@@ -50,75 +48,70 @@ MANDATORY STRUCTURE:
 CRITICAL PLACEMENT RULES:
 - Every entity MUST have TeleportAction in Init
 - Every TeleportAction MUST have Position
-- ALWAYS use LanePosition for ALL entities — WorldPosition and RelativeRoadPosition cause off-road spawning in CARLA Town01
-- NEVER use WorldPosition or RelativeRoadPosition
+- ALWAYS use LanePosition for ALL entities
+- NEVER use WorldPosition or RelativeRoadPosition — both cause off-road/river spawns in CARLA Town01
 
 VERIFIED SPAWN POSITIONS FOR TOWN01 — USE EXACTLY THESE VALUES:
 
-  CCRs (Car-to-Car Rear Stationary) — hero moves, adversary stationary ahead:
-    Hero (moving, behind):     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
-    Adversary (stationary, ahead): <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
+  CCRs (Car-to-Car Rear Stationary):
+    Hero (behind, moving):         <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Adversary (ahead, stationary): <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
 
-  CCRm (Car-to-Car Rear Moving) — both move, hero faster:
-    Hero (behind, faster):     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
-    Adversary (ahead, slower): <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
+  CCRm (Car-to-Car Rear Moving):
+    Hero (behind, faster):         <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Adversary (ahead, slower):     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
 
-  CCRb (Car-to-Car Rear Braking) — both move, adversary brakes:
-    Hero (behind):             <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
-    Adversary (ahead):         <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
+  CCRb (Car-to-Car Rear Braking):
+    Hero (behind):                 <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Adversary (ahead, brakes):     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
 
   CCFtap (Car-to-Car Front Turn Across Path) — perpendicular roads:
-    Hero:                      <LanePosition roadId="4" laneId="-1" offset="0.0" s="197.98" />
-    Adversary:                 <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
+    Hero:                          <LanePosition roadId="4"  laneId="-1" offset="0.0" s="197.98"/>
+    Adversary:                     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
 
   CCFtab (Car-to-Car Front Turn Across Bicyclist) — perpendicular roads:
-    Hero:                      <LanePosition roadId="4" laneId="-1" offset="0.0" s="197.98" />
-    Bicyclist (adversary):     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66" />
+    Hero:                          <LanePosition roadId="4"  laneId="-1" offset="0.0" s="197.98"/>
+    Bicyclist adversary:           <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
 
   CCFhos (Car-to-Car Front Head-On Straight) — opposite lanes:
-    Hero:                      <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
-    Adversary (opposite lane): <LanePosition roadId="12" laneId="1" offset="0.0" s="193.66" />
+    Hero:                          <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Adversary (opposite lane):     <LanePosition roadId="12" laneId="1"  offset="0.0" s="193.66"/>
 
   CCFhol (Car-to-Car Front Head-On Lane Change) — opposite lanes:
-    Hero:                      <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
-    Adversary (opposite lane): <LanePosition roadId="12" laneId="1" offset="0.0" s="193.66" />
-
-  CCFho (Car-to-Car Front Head-On) — opposite lanes:
-    Hero:                      <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84" />
-    Adversary (opposite lane): <LanePosition roadId="12" laneId="1" offset="0.0" s="193.66" />
+    Hero:                          <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Adversary (starts opp. lane):  <LanePosition roadId="12" laneId="1"  offset="0.0" s="193.66"/>
+    NOTE: adversary uses FollowTrajectoryAction to change lanes — see CCFhol SPECIAL RULES below
 
 SPEED SETTINGS — USE EXACTLY THESE VALUES PER SCENARIO:
-  CCRs:  heroSpeed=8.0,  adversarySpeed=0.0  (adversary stationary)
-  CCRm:  heroSpeed=8.0,  adversarySpeed=3.0  (adversary slower)
-  CCRb:  heroSpeed=8.0,  adversarySpeed=8.0  (adversary brakes at t=5s)
-  CCFtap: heroSpeed=10.0, adversarySpeed=3.0
-  CCFtab: heroSpeed=10.0, adversarySpeed=3.0
-  CCFhos: heroSpeed=8.0,  adversarySpeed=8.0
-  CCFhol: heroSpeed=8.0,  adversarySpeed=8.0
-  CCFho:  heroSpeed=8.0,  adversarySpeed=8.0
+  CCRs:   heroSpeed=8.0,   adversarySpeed=0.0
+  CCRm:   heroSpeed=8.0,   adversarySpeed=3.0
+  CCRb:   heroSpeed=8.0,   adversarySpeed=8.0
+  CCFtap: heroSpeed=10.0,  adversarySpeed=3.0
+  CCFtab: heroSpeed=10.0,  adversarySpeed=3.0
+  CCFhos: heroSpeed=8.333, adversarySpeed=8.333
+  CCFhol: heroSpeed=8.333, adversarySpeed=8.333
 
 CRITICAL INIT SPEED RULES:
 - Init AbsoluteTargetSpeed MUST always be value="0.0" for ALL entities
 - DO NOT set initial speed to $heroSpeed or $adversarySpeed in Init
-- Speed ramping MUST happen in Story ManeuverGroup using linear dynamics
+- Speed ramping MUST happen in Story ManeuverGroup
 
 CRITICAL STORY SPEED RULES:
-- Story ManeuverGroup SpeedAction MUST use value="$heroSpeed" for hero
-- Story ManeuverGroup SpeedAction MUST use value="$adversarySpeed" for adversary
-- NEVER use 0.0 as the speed value in Story ManeuverGroup events (unless adversarySpeed=0.0)
-- ALL SpeedAction in Story ManeuverGroup MUST use:
-  dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+- Story SpeedAction for hero: value="$heroSpeed"
+- Story SpeedAction for adversary: value="$adversarySpeed"
+- ALL Story SpeedActions MUST use: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
 - DO NOT use dynamicsShape="step" in Story events
 
 CRITICAL FORMAT RULES:
-- date MUST always be "2020-03-20T12:00:00" — never just a date without time
+- date MUST always be "2020-03-20T12:00:00"
 - Map MUST always be Town01 with SceneGraphFile filepath=""
-- maxAcceleration MUST always be 200 (not 10.0)
-- SimulationTimeCondition value MUST always be "1.0" (never "0.1" or "0.0")
-- Entity names MUST be "hero" and "adversary" (not "ego" and "target")
-- hero vehicle MUST be "vehicle.lincoln.mkz_2017" (underscore before 2017)
+- maxAcceleration MUST always be 200
+- SimulationTimeCondition value MUST always be "1.0" (NEVER "0.1" or "0.0")
+- Entity names MUST be "hero" and "adversary"
+- hero vehicle MUST be "vehicle.lincoln.mkz_2017"
 - adversary vehicle MUST be "vehicle.tesla.model3"
 - bicyclist vehicle MUST be "vehicle.bh.crossbike" with vehicleCategory="bicycle"
+- motorcycle vehicle MUST be "vehicle.kawasaki.ninja" with vehicleCategory="motorcycle"
 - Properties MUST include both type and role_name for each vehicle
 - Always include EnvironmentAction block in Init GlobalAction
 - Always include AEB braking trigger on hero
@@ -126,19 +119,110 @@ CRITICAL FORMAT RULES:
 
 AEB TRIGGER RULES:
 - Rear scenarios (CCRs, CCRm, CCRb):
-  RelativeDistanceCondition entityRef="adversary" relativeDistanceType="longitudinal" value="12.0" freespace="true" rule="lessThan"
-- Front and head-on scenarios (CCFtap, CCFtab, CCFhos, CCFhol, CCFho):
-  RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance" value="30.0" freespace="true" rule="lessThan"
-- AEB Action MUST always be:
-  SpeedAction to 0.0 m/s with dynamicsShape="linear" value="10.0" dynamicsDimension="distance"
+  RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+  value="12.0" freespace="false" rule="lessThan"
+- Front and head-on scenarios (CCFtap, CCFtab, CCFhos, CCFhol):
+  RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+  value="20.0" freespace="false" rule="lessThan"
+
+AEB BRAKE ACTION (ALL scenarios):
+- SpeedAction to 0.0 m/s
+- dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+
+CCFhol SPECIAL RULES — LANE CHANGE:
+- NEVER use LaneChangeAction — causes segmentation fault in CARLA 0.9.15
+- Use FollowTrajectoryAction with Polyline vertices for adversary lane change
+- FollowTrajectoryAction REQUIRES TimeReference child element:
+  <TimeReference>
+    <Timing domainAbsoluteRelative="absolute" scale="1.0" offset="0.0"/>
+  </TimeReference>
+- Polyline MUST have 4 or more vertices (fewer causes IndexError in SR)
+- Lane change triggered when adversary is within 35m cartesianDistance of hero
+- Both hero AND adversary need separate AEB ManeuverGroups
+- CCFhol FollowTrajectoryAction example:
+  <FollowTrajectoryAction>
+    <Trajectory name="LaneChangePath" closed="false">
+      <ParameterDeclarations/>
+      <Shape>
+        <Polyline>
+          <Vertex time="0.0">
+            <Position><LanePosition roadId="12" laneId="1"  s="193.66" offset="0.0"/></Position>
+          </Vertex>
+          <Vertex time="1.5">
+            <Position><LanePosition roadId="12" laneId="1"  s="188.0"  offset="-1.75"/></Position>
+          </Vertex>
+          <Vertex time="3.0">
+            <Position><LanePosition roadId="12" laneId="-1" s="182.0"  offset="0.0"/></Position>
+          </Vertex>
+          <Vertex time="10.0">
+            <Position><LanePosition roadId="12" laneId="-1" s="170.0"  offset="0.0"/></Position>
+          </Vertex>
+        </Polyline>
+      </Shape>
+    </Trajectory>
+    <TimeReference>
+      <Timing domainAbsoluteRelative="absolute" scale="1.0" offset="0.0"/>
+    </TimeReference>
+    <TrajectoryFollowingMode followingMode="position"/>
+  </FollowTrajectoryAction>
+
+WAITGROUP RULES:
+- ALWAYS add WaitGroup as the LAST ManeuverGroup in every Act
+- WaitGroup keeps Act alive until 60s timeout
+- Without WaitGroup, SR exits early when all ManeuverGroups complete
+- WaitGroup triggers at SimulationTimeCondition value="55.0"
+- WaitGroup example:
+  <ManeuverGroup maximumExecutionCount="1" name="WaitGroup">
+    <Actors selectTriggeringEntities="false">
+      <EntityRef entityRef="adversary"/>
+    </Actors>
+    <Maneuver name="WaitManeuver">
+      <Event name="WaitEvent" priority="overwrite">
+        <Action name="WaitAction">
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <SpeedActionDynamics dynamicsShape="linear" value="1.0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="0.0"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+        </Action>
+        <StartTrigger>
+          <ConditionGroup>
+            <Condition name="WaitTrigger" delay="0.0" conditionEdge="rising">
+              <ByValueCondition>
+                <SimulationTimeCondition value="55.0" rule="greaterThan"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StartTrigger>
+      </Event>
+    </Maneuver>
+  </ManeuverGroup>
+
+GLOBAL STOPTRIGGER RULES:
+- MUST use criteria_CollisionTest ParameterCondition
+- parameterRef MUST be "criteria_CollisionTest" (not empty string)
+- Without this SR exits immediately with "Nothing to analyze" error
+- Do NOT include criteria_DrivenDistanceTest
+- Correct pattern:
+  <StopTrigger>
+    <ConditionGroup>
+      <Condition name="criteria_CollisionTest" delay="0.0" conditionEdge="rising">
+        <ByValueCondition>
+          <ParameterCondition parameterRef="criteria_CollisionTest" value="" rule="lessThan"/>
+        </ByValueCondition>
+      </Condition>
+    </ConditionGroup>
+  </StopTrigger>
 
 NULL HANDLING:
-- Null values are VALID
-- Use safe defaults:
-  - ego_speed_kph: use scenario-specific speed from SPEED SETTINGS above
-  - target_speed_kph: use scenario-specific speed from SPEED SETTINGS above
-  - initial_gap_m: 30.0
-  - timeout_s: 60
+- Use safe defaults from SPEED SETTINGS table above (NEVER use 13.889 as default)
+- initial_gap_m default: 30.0
+- timeout_s default: 60
 
 REQUIRED COMMENT:
 - Include: <!-- GENERATED_BY: Claude -->
@@ -147,7 +231,86 @@ NO TODO PLACEHOLDERS. Code must be executable.
 """.strip()
 
 SYSTEM_PROMPT_XOSC_LSS = SYSTEM_PROMPT_XOSC_BASE + "\n\nFocus on lane-relative positioning and lateral offsets for LSS scenarios."
-SYSTEM_PROMPT_XOSC_VRU = SYSTEM_PROMPT_XOSC_BASE + "\n\nFocus on VRU (pedestrian/cyclist) crossing behavior."
+SYSTEM_PROMPT_XOSC_VRU = SYSTEM_PROMPT_XOSC_BASE + """
+
+VRU-SPECIFIC RULES:
+
+PEDESTRIAN ENTITY:
+- Use <Pedestrian> tag NOT <Vehicle> tag
+- model="walker.pedestrian.0001" mass="80.0" pedestrianCategory="pedestrian"
+- Entity name: "pedestrian" (not "adversary")
+- Properties: type="simulation" role_name="pedestrian"
+- Pedestrian BoundingBox: Center x="0.0" y="0.0" z="0.9", Dimensions width="0.5" length="0.4" height="1.8"
+
+CYCLIST ENTITY:
+- Use <Vehicle> tag with name="vehicle.bh.crossbike" vehicleCategory="bicycle"
+- Entity name: "adversary"
+
+MOTORCYCLE ENTITY:
+- Use <Vehicle> tag with name="vehicle.kawasaki.ninja" vehicleCategory="motorcycle"
+- Entity name: "adversary"
+- Same xosc structure as CCR/CCF scenarios
+
+VRU SPAWN POSITIONS (Town01 validated):
+  Pedestrian scenarios (CPFA-50, CPNA-25, CPNA-75, CPNCO-50, CPLA-25, CPLA-50):
+    Hero:        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Pedestrian:  <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
+
+  Cyclist scenarios (CBNa-25/50/75, CBFa-50):
+    Hero:        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Cyclist:     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
+
+  Motorcyclist scenarios (CMRs, CMRb):
+    Hero:        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Motorcycle:  <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
+
+  CMFtap (Motorcyclist Front Turn Across Path):
+    Hero:        <LanePosition roadId="4"  laneId="-1" offset="0.0" s="197.98"/>
+    Motorcycle:  <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
+
+  CMoncoming (Motorcyclist Oncoming):
+    Hero:        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Motorcycle:  <LanePosition roadId="12" laneId="1"  offset="0.0" s="193.66"/>
+
+  CMovertaking (Motorcyclist Overtaking) — uses FollowTrajectoryAction:
+    Hero:        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+    Motorcycle:  <LanePosition roadId="12" laneId="1"  offset="0.0" s="193.66"/>
+
+VRU SPEED SETTINGS:
+VRU SPEED SETTINGS (ALL pedestrian speeds = 1.389 m/s = 5 km/h):
+  CPFA-50:  heroSpeed=13.889, pedestrianSpeed=1.389
+  CPNA-25:  heroSpeed=5.556,  pedestrianSpeed=1.389
+  CPNA-75:  heroSpeed=11.111, pedestrianSpeed=1.389
+  CPNCO-50: heroSpeed=8.333,  pedestrianSpeed=1.389
+  CPLA-25:  heroSpeed=5.556,  pedestrianSpeed=1.389
+  CPLA-50:  heroSpeed=8.333,  pedestrianSpeed=1.389
+  CBNa-25:  heroSpeed=5.556,  adversarySpeed=4.167
+  CBNa-50:  heroSpeed=8.333,  adversarySpeed=4.167
+  CBNa-75:  heroSpeed=11.111, adversarySpeed=4.167
+  CBFa-50:  heroSpeed=8.333,  adversarySpeed=4.167
+  CMRs:     heroSpeed=8.333,  adversarySpeed=0.0
+  CMRb:     heroSpeed=8.333,  adversarySpeed=8.333
+  CMFtap:   heroSpeed=8.333,  adversarySpeed=8.333
+  CMoncoming:   heroSpeed=8.333, adversarySpeed=8.333
+  CMovertaking: heroSpeed=8.333, adversarySpeed=8.333
+
+PEDESTRIAN MOTION RULES (CRITICAL):
+- AcquirePositionAction and RoutingAction are BROKEN for pedestrians in SR 0.9.16
+- NEVER use AcquirePositionAction or RoutingAction for pedestrians
+- Pedestrian motion: SpeedAction ONLY
+- Pedestrian walk trigger: RelativeDistanceCondition longitudinal value="40.0"
+- AEB trigger for pedestrian scenarios: cartesianDistance value="20.0" freespace="false"
+- AEB brake: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+
+PEDESTRIAN CONTINUE GROUP:
+- After hero brakes, pedestrian should continue walking
+- Add PedestrianContinueGroup triggered when hero SpeedCondition value="1.0" rule="lessThan"
+
+KNOWN SR 0.9.16 LIMITATIONS (document in xosc comments):
+- CPNA and CPLA appear visually identical — pedestrian crossing not supported
+- Pedestrian walks longitudinally as substitute for lateral crossing
+- LaneChangeAction causes segfault — use FollowTrajectoryAction for CMovertaking
+""".strip()
 
 # =============================================================================
 # USER REQUIREMENTS
@@ -159,7 +322,8 @@ DATA SOURCES:
 - runtime_hints: Helper info
 
 ENTITY NAMING:
-- Use: "hero" for ego vehicle, "adversary" for target vehicle
+- Use: "hero" for ego vehicle, "adversary" for target vehicle/cyclist/motorcycle
+- For pedestrian scenarios: use "pedestrian" as entity name
 - EntityRef must match ScenarioObject name exactly
 """.strip()
 
@@ -169,46 +333,34 @@ SCENARIO FAMILY: AEB (Automatic Emergency Braking)
 ENTITIES:
 - Define exactly 2 entities: "hero" and "adversary"
 - Both must be Vehicle type
-- hero: vehicle.lincoln.mkz_2017 (NOTE: underscore before 2017)
+- hero: vehicle.lincoln.mkz_2017
 - adversary: vehicle.tesla.model3
-- For bicyclist scenarios (CCFtab): adversary MUST be vehicle.bh.crossbike with vehicleCategory="bicycle"
+- For CCFtab: adversary MUST be vehicle.bh.crossbike with vehicleCategory="bicycle"
 
 PARAMETER EXTRACTION:
 - ego_speed_kph from user_config.dynamics.ego_speed_kph
 - target_speed_kph from user_config.dynamics.target_speed_kph
 - initial_gap_m from user_config.layout.initial_gap_m (default: 30.0)
 - timeout_s from user_config.termination.timeout_s (default: 60)
-- If speeds are null, use scenario-specific defaults from SPEED SETTINGS in system prompt
+- If speeds are null, use SPEED SETTINGS table from system prompt
 
 SPEED CONVERSION:
 - kph to m/s: divide by 3.6
-- Default speeds if null: use SPEED SETTINGS table from system prompt (NOT 13.889)
 
-TRIGGER TYPE HANDLING:
-1. START_IMMEDIATELY (use value="1.0" not "0.1"):
-   <StartTrigger>
-     <ConditionGroup>
-       <Condition name="StartCondition" delay="0" conditionEdge="rising">
-         <ByValueCondition>
-           <SimulationTimeCondition value="1.0" rule="greaterThan"/>
-         </ByValueCondition>
-       </Condition>
-     </ConditionGroup>
-   </StartTrigger>
+TRIGGER:
+- All triggers use SimulationTimeCondition value="1.0" rule="greaterThan"
 
-2. AEB BRAKE TRIGGER (always include on hero ManeuverGroup):
-   For rear scenarios (CCRs, CCRm, CCRb):
-   <RelativeDistanceCondition entityRef="adversary" relativeDistanceType="longitudinal" value="12.0" freespace="true" rule="lessThan"/>
-   For front/head-on scenarios (CCFtap, CCFtab, CCFhos, CCFhol, CCFho):
-   <RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance" value="30.0" freespace="true" rule="lessThan"/>
+CCFhol SPECIAL CASE:
+- Adversary uses FollowTrajectoryAction (NOT LaneChangeAction)
+- See CCFhol SPECIAL RULES in system prompt for exact XML
 
-MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
+MINIMAL WORKING EXAMPLE — CCRs scenario:
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- GENERATED_BY: Claude -->
 <OpenSCENARIO>
   <FileHeader revMajor="1" revMinor="0" date="2020-03-20T12:00:00" description="AEB CCRs Test" author=""/>
   <ParameterDeclarations>
-    <ParameterDeclaration name="heroSpeed" parameterType="double" value="8.0"/>
+    <ParameterDeclaration name="heroSpeed"     parameterType="double" value="8.0"/>
     <ParameterDeclaration name="adversarySpeed" parameterType="double" value="0.0"/>
   </ParameterDeclarations>
   <CatalogLocations/>
@@ -227,10 +379,10 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
         </BoundingBox>
         <Axles>
           <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
-          <RearAxle maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
+          <RearAxle  maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
         </Axles>
         <Properties>
-          <Property name="type" value="ego_vehicle"/>
+          <Property name="type"      value="ego_vehicle"/>
           <Property name="role_name" value="hero"/>
         </Properties>
       </Vehicle>
@@ -245,10 +397,10 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
         </BoundingBox>
         <Axles>
           <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
-          <RearAxle maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
+          <RearAxle  maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
         </Axles>
         <Properties>
-          <Property name="type" value="simulation"/>
+          <Property name="type"      value="simulation"/>
           <Property name="role_name" value="adversary"/>
         </Properties>
       </Vehicle>
@@ -274,7 +426,7 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
           <PrivateAction>
             <TeleportAction>
               <Position>
-                <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
+                <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
               </Position>
             </TeleportAction>
           </PrivateAction>
@@ -293,7 +445,7 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
           <PrivateAction>
             <TeleportAction>
               <Position>
-                <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
+                <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
               </Position>
             </TeleportAction>
           </PrivateAction>
@@ -312,13 +464,13 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
     </Init>
     <Story name="AEBStory">
       <Act name="AEBTestAct">
-        <ManeuverGroup maximumExecutionCount="1" name="HeroManeuverGroup">
+        <ManeuverGroup maximumExecutionCount="1" name="HeroAccelGroup">
           <Actors selectTriggeringEntities="false">
             <EntityRef entityRef="hero"/>
           </Actors>
-          <Maneuver name="HeroManeuver">
-            <Event name="HeroDrivesEvent" priority="overwrite">
-              <Action name="HeroDrivesAction">
+          <Maneuver name="HeroAccelManeuver">
+            <Event name="HeroAccelEvent" priority="overwrite">
+              <Action name="HeroAccelAction">
                 <PrivateAction>
                   <LongitudinalAction>
                     <SpeedAction>
@@ -332,7 +484,7 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
               </Action>
               <StartTrigger>
                 <ConditionGroup>
-                  <Condition name="StartCondition" delay="0" conditionEdge="rising">
+                  <Condition name="HeroAccelStart" delay="0.0" conditionEdge="rising">
                     <ByValueCondition>
                       <SimulationTimeCondition value="1.0" rule="greaterThan"/>
                     </ByValueCondition>
@@ -340,43 +492,15 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
                 </ConditionGroup>
               </StartTrigger>
             </Event>
-            <Event name="AEBBrakeEvent" priority="overwrite">
-              <Action name="AEBBrakeAction">
-                <PrivateAction>
-                  <LongitudinalAction>
-                    <SpeedAction>
-                      <SpeedActionDynamics dynamicsShape="linear" value="10.0" dynamicsDimension="distance"/>
-                      <SpeedActionTarget>
-                        <AbsoluteTargetSpeed value="0.0"/>
-                      </SpeedActionTarget>
-                    </SpeedAction>
-                  </LongitudinalAction>
-                </PrivateAction>
-              </Action>
-              <StartTrigger>
-                <ConditionGroup>
-                  <Condition name="AEBTrigger" delay="0" conditionEdge="rising">
-                    <ByEntityCondition>
-                      <TriggeringEntities triggeringEntitiesRule="any">
-                        <EntityRef entityRef="hero"/>
-                      </TriggeringEntities>
-                      <EntityCondition>
-                        <RelativeDistanceCondition entityRef="adversary" relativeDistanceType="longitudinal" value="12.0" freespace="true" rule="lessThan"/>
-                      </EntityCondition>
-                    </ByEntityCondition>
-                  </Condition>
-                </ConditionGroup>
-              </StartTrigger>
-            </Event>
           </Maneuver>
         </ManeuverGroup>
-        <ManeuverGroup maximumExecutionCount="1" name="AdversaryManeuverGroup">
+        <ManeuverGroup maximumExecutionCount="1" name="AdversaryAccelGroup">
           <Actors selectTriggeringEntities="false">
             <EntityRef entityRef="adversary"/>
           </Actors>
-          <Maneuver name="AdversaryManeuver">
-            <Event name="AdversaryStaysEvent" priority="overwrite">
-              <Action name="AdversaryStaysAction">
+          <Maneuver name="AdversaryAccelManeuver">
+            <Event name="AdversaryAccelEvent" priority="overwrite">
+              <Action name="AdversaryAccelAction">
                 <PrivateAction>
                   <LongitudinalAction>
                     <SpeedAction>
@@ -390,7 +514,7 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
               </Action>
               <StartTrigger>
                 <ConditionGroup>
-                  <Condition name="TargetStartCondition" delay="0" conditionEdge="rising">
+                  <Condition name="AdversaryAccelStart" delay="0.0" conditionEdge="rising">
                     <ByValueCondition>
                       <SimulationTimeCondition value="1.0" rule="greaterThan"/>
                     </ByValueCondition>
@@ -400,9 +524,76 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
             </Event>
           </Maneuver>
         </ManeuverGroup>
+        <ManeuverGroup maximumExecutionCount="1" name="HeroAEBGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="hero"/>
+          </Actors>
+          <Maneuver name="HeroAEBManeuver">
+            <Event name="HeroAEBEvent" priority="overwrite">
+              <Action name="HeroAEBBrakeAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="3.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="0.0"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="HeroAEBTrigger" delay="0.0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="hero"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <RelativeDistanceCondition entityRef="adversary"
+                          relativeDistanceType="cartesianDistance"
+                          value="12.0" freespace="false" rule="lessThan"/>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <ManeuverGroup maximumExecutionCount="1" name="WaitGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="adversary"/>
+          </Actors>
+          <Maneuver name="WaitManeuver">
+            <Event name="WaitEvent" priority="overwrite">
+              <Action name="WaitAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="1.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="0.0"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="WaitTrigger" delay="0.0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="55.0" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
         <StartTrigger>
           <ConditionGroup>
-            <Condition name="ActStart" delay="0" conditionEdge="rising">
+            <Condition name="ActStartCondition" delay="0.0" conditionEdge="rising">
               <ByValueCondition>
                 <SimulationTimeCondition value="1.0" rule="greaterThan"/>
               </ByValueCondition>
@@ -411,7 +602,7 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
         </StartTrigger>
         <StopTrigger>
           <ConditionGroup>
-            <Condition name="Timeout" delay="0" conditionEdge="rising">
+            <Condition name="ActTimeoutCondition" delay="0.0" conditionEdge="rising">
               <ByValueCondition>
                 <SimulationTimeCondition value="60.0" rule="greaterThan"/>
               </ByValueCondition>
@@ -422,14 +613,9 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
     </Story>
     <StopTrigger>
       <ConditionGroup>
-        <Condition name="criteria_CollisionTest" delay="0" conditionEdge="rising">
+        <Condition name="criteria_CollisionTest" delay="0.0" conditionEdge="rising">
           <ByValueCondition>
-            <ParameterCondition parameterRef="" value="" rule="lessThan"/>
-          </ByValueCondition>
-        </Condition>
-        <Condition name="criteria_DrivenDistanceTest" delay="0" conditionEdge="rising">
-          <ByValueCondition>
-            <ParameterCondition parameterRef="distance_success" value="100" rule="lessThan"/>
+            <ParameterCondition parameterRef="criteria_CollisionTest" value="" rule="lessThan"/>
           </ByValueCondition>
         </Condition>
       </ConditionGroup>
@@ -438,27 +624,47 @@ MINIMAL WORKING EXAMPLE — CCRs scenario (follow this structure exactly):
 </OpenSCENARIO>
 
 KEY POINTS:
-1. Follow the example structure exactly — do not deviate
-2. ALWAYS use LanePosition for ALL entities — never WorldPosition or RelativeRoadPosition
-3. Use EXACTLY the verified LanePosition values from VERIFIED SPAWN POSITIONS table above
-4. For CCRs: hero s="193.66" (behind, moving), adversary s="156.84" (ahead, stationary)
-5. For CCRm/CCRb: hero s="193.66" (behind), adversary s="156.84" (ahead)
-6. For CCFtap/CCFtab: hero roadId=4 s="197.98", adversary roadId=12 s="193.66"
-7. For CCFhos/CCFhol/CCFho: hero laneId=-1 s="156.84", adversary laneId=1 s="193.66"
-8. Init AbsoluteTargetSpeed MUST ALWAYS be exactly value="0.0" — NEVER $heroSpeed or $adversarySpeed
-9. Story ManeuverGroup SpeedAction MUST use value="$heroSpeed" for hero and value="$adversarySpeed" for adversary
-10. Story SpeedAction MUST use dynamicsShape="linear" value="3.0" dynamicsDimension="time"
-11. Entity names MUST be "hero" and "adversary"
-12. date MUST be "2020-03-20T12:00:00" — never just a date
-13. Map MUST be Town01 with SceneGraphFile filepath=""
-14. maxAcceleration MUST be 200
-15. SimulationTimeCondition MUST be 1.0 everywhere (never 0.1)
-16. Always include EnvironmentAction in Init
-17. Always include role_name property on both vehicles
-18. Always include AEB braking trigger (longitudinal 12m for rear, cartesianDistance 30m for front)
-19. Global StopTrigger MUST use criteria_CollisionTest pattern
-20. Default speeds if null: use SPEED SETTINGS table — NEVER use 13.889
-21. Return only JSON: {"xosc": "..."}
+1. ALWAYS use LanePosition for ALL entities — never WorldPosition or RelativeRoadPosition
+2. CCRs/CCRm/CCRb: hero s="156.84" (behind), adversary s="193.66" (ahead)
+3. CCFtap/CCFtab: hero roadId=4 s="197.98", adversary roadId=12 s="193.66"
+4. CCFhos/CCFhol: hero laneId=-1 s="156.84", adversary laneId=1 s="193.66"
+5. Init AbsoluteTargetSpeed MUST ALWAYS be value="0.0"
+6. Story SpeedAction: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+7. SimulationTimeCondition MUST be 1.0 everywhere
+8. AEB brake: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+9. AEB trigger CCR: cartesianDistance 12.0 freespace="false"
+10. AEB trigger CCF: cartesianDistance 20.0 freespace="false"
+11. CCFhol: use FollowTrajectoryAction NOT LaneChangeAction (segfault)
+12. Always add WaitGroup at t=55s
+13. Global StopTrigger: criteria_CollisionTest parameterRef="criteria_CollisionTest"
+14. Do NOT include criteria_DrivenDistanceTest
+15. Return only JSON: {"xosc": "..."}
+""".strip()
+
+USER_REQUIREMENTS_XOSC_VRU = """
+SCENARIO FAMILY: VRU (Vulnerable Road User)
+
+ENTITIES:
+- hero: vehicle.lincoln.mkz_2017 (always)
+- pedestrian scenarios: <Pedestrian> entity, model="walker.pedestrian.0001"
+- cyclist scenarios: vehicle.bh.crossbike, vehicleCategory="bicycle"
+- motorcyclist scenarios: vehicle.kawasaki.ninja, vehicleCategory="motorcycle"
+
+PARAMETER EXTRACTION:
+- heroSpeed from scenario VRU SPEED SETTINGS in system prompt
+- adversarySpeed / pedestrianSpeed from VRU SPEED SETTINGS in system prompt
+
+PEDESTRIAN MOTION (CRITICAL):
+- AcquirePositionAction and RoutingAction are BROKEN in SR 0.9.16 for pedestrians
+- Use SpeedAction ONLY for pedestrian movement
+- Pedestrian walk trigger: longitudinal distance 40.0m from hero
+- After hero stops (SpeedCondition < 1.0), add PedestrianContinueGroup to keep ped walking
+
+AEB TRIGGER FOR VRU:
+- cartesianDistance value="20.0" freespace="false" rule="lessThan"
+- AEB brake: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+
+ALWAYS include WaitGroup at t=55s and criteria_CollisionTest in global StopTrigger.
 """.strip()
 
 USER_REQUIREMENTS_XOSC_LSS = """
@@ -467,26 +673,6 @@ Follow same structure as AEB but:
 - Use LanePosition for hero placement
 - Include lateral offset parameters
 - Define lane change maneuvers if needed
-
-Extract from user_config.lss:
-- ego_speed_kph
-- lateral_offset_m
-- boundary_type
-- system type (LDW/LKA/ELK)
-""".strip()
-
-USER_REQUIREMENTS_XOSC_VRU = """
-SCENARIO FAMILY: VRU (Vulnerable Road User)
-Follow same structure as AEB but:
-- Add VRU entity (pedestrian or cyclist)
-- Define crossing path
-- Include VRU speed and position
-
-Extract from user_config.vru:
-- vru_blueprint
-- crossing_side
-- speed_mps
-- path_offset_m
 """.strip()
 
 # =============================================================================
@@ -504,7 +690,6 @@ def pick_xosc_prompts(family: str) -> Tuple[str, str]:
             SYSTEM_PROMPT_XOSC_VRU,
             USER_REQUIREMENTS_XOSC_COMMON + "\n\n" + USER_REQUIREMENTS_XOSC_VRU
         )
-    # AEB (default)
     return (
         SYSTEM_PROMPT_XOSC_BASE,
         USER_REQUIREMENTS_XOSC_COMMON + "\n\n" + USER_REQUIREMENTS_XOSC_AEB
@@ -519,12 +704,8 @@ def build_xosc_prompts(
     family: str,
     retrieved_context: List[Dict[str, Any]],
 ) -> Tuple[str, str]:
-    """
-    Builds system + user prompts for xosc generation.
-    """
     system_prompt, requirements = pick_xosc_prompts(family)
 
-    # Format retrieved context
     context_lines = []
     if retrieved_context:
         context_lines.append("RETRIEVED EXAMPLES AND TEMPLATES:")
@@ -560,14 +741,13 @@ OUTPUT REQUIREMENTS:
    - Include <?xml version="1.0" encoding="UTF-8"?>
    - Include <!-- GENERATED_BY: Claude -->
    - Be complete and valid OpenSCENARIO 1.x
-   - Follow the example structure above exactly
-   - Handle null values with safe defaults from SPEED SETTINGS table
-   - Include LanePosition for all entities using EXACTLY the verified Town01 spawn points
-   - Include TeleportAction with LanePosition and SpeedAction (value=0.0) for all entities in Init
-   - Include EnvironmentAction in Init
-   - Include AEB braking trigger on hero
-   - Use criteria_CollisionTest in global StopTrigger
-   - Use $heroSpeed in Story HeroDrivesAction and $adversarySpeed in Story AdversaryDrivesAction
+   - Use LanePosition for ALL entities with EXACTLY the verified Town01 spawn points
+   - Init speed = 0.0 for all entities
+   - Story speed ramp: linear 3.0s to $heroSpeed / $adversarySpeed
+   - SimulationTimeCondition = 1.0 everywhere
+   - AEB brake: linear 3.0s to 0.0
+   - WaitGroup at t=55s
+   - criteria_CollisionTest in global StopTrigger
 5. Start your response with {{ and end with }}
 
 GENERATE THE XML NOW:
