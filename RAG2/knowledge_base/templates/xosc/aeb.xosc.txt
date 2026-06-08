@@ -1,5 +1,361 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- ================================
+     AEB OpenSCENARIO Template (v4 - CARLA ScenarioRunner VALIDATED)
+     Family: AEB
+     Output: OpenSCENARIO (.xosc)
+     Validated: CARLA 0.9.15 / ScenarioRunner 0.9.16 / Town01
+
+     CRITICAL RULES FOR LLM:
+     - date MUST be "2020-03-20T12:00:00"
+     - Map MUST be Town01 with SceneGraphFile filepath=""
+     - Entity names MUST be "hero" and "adversary"
+     - hero vehicle MUST be vehicle.lincoln.mkz_2017 (underscore before 2017)
+     - adversary vehicle MUST be vehicle.tesla.model3
+     - maxAcceleration MUST be 200
+     - SimulationTimeCondition MUST be 1.0 everywhere (NEVER 0.1 or 0.0)
+     - ALWAYS use LanePosition for ALL entities (NEVER WorldPosition or RelativeRoadPosition)
+     - Init AbsoluteTargetSpeed MUST be 0.0 for ALL entities
+     - Speed ramp MUST happen in Story ManeuverGroup using linear dynamics
+     - Story SpeedAction MUST use dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+     - AEB trigger CCR: cartesianDistance value=12.0 freespace="false"
+     - AEB trigger CCF/VRU: cartesianDistance value=20.0 freespace="false"
+     - AEB brake: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+     - ALWAYS include WaitGroup ManeuverGroup triggering at t=55s
+     - Global StopTrigger MUST use criteria_CollisionTest pattern
+     - criteria_CollisionTest parameterRef MUST be "criteria_CollisionTest"
+     - Do NOT include criteria_DrivenDistanceTest
+
+     VERIFIED SPAWN POSITIONS (Town01):
+     CCRs/CCRm/CCRb: hero roadId=12 laneId=-1 s=156.84, adversary roadId=12 laneId=-1 s=193.66
+     CCFtap/CCFtab:  hero roadId=4  laneId=-1 s=197.98, adversary roadId=12 laneId=-1 s=193.66
+     CCFhos/CCFhol:  hero roadId=12 laneId=-1 s=156.84, adversary roadId=12 laneId=1  s=193.66
+     ================================ -->
+
+<OpenSCENARIO>
+
+  <!-- GENERATED_BY: Claude -->
+
+  <FileHeader revMajor="1" revMinor="0"
+              date="2020-03-20T12:00:00"
+              description="{{ scenario_name }}"
+              author=""/>
+
+  <ParameterDeclarations>
+    <ParameterDeclaration name="heroSpeed"      parameterType="double" value="{{ ego_speed_mps }}"/>
+    <ParameterDeclaration name="adversarySpeed" parameterType="double" value="{{ target_speed_mps }}"/>
+  </ParameterDeclarations>
+
+  <CatalogLocations/>
+
+  <RoadNetwork>
+    <LogicFile filepath="Town01"/>
+    <SceneGraphFile filepath=""/>
+  </RoadNetwork>
+
+  <Entities>
+    <ScenarioObject name="hero">
+      <Vehicle name="vehicle.lincoln.mkz_2017" vehicleCategory="car">
+        <ParameterDeclarations/>
+        <Performance maxSpeed="69.444" maxAcceleration="200" maxDeceleration="10.0"/>
+        <BoundingBox>
+          <Center x="1.5" y="0.0" z="0.9"/>
+          <Dimensions width="2.1" length="4.5" height="1.8"/>
+        </BoundingBox>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
+          <RearAxle  maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
+        </Axles>
+        <Properties>
+          <Property name="type"      value="ego_vehicle"/>
+          <Property name="role_name" value="hero"/>
+        </Properties>
+      </Vehicle>
+    </ScenarioObject>
+
+    <ScenarioObject name="adversary">
+      <Vehicle name="vehicle.tesla.model3" vehicleCategory="car">
+        <ParameterDeclarations/>
+        <Performance maxSpeed="69.444" maxAcceleration="200" maxDeceleration="10.0"/>
+        <BoundingBox>
+          <Center x="1.5" y="0.0" z="0.9"/>
+          <Dimensions width="2.1" length="4.5" height="1.8"/>
+        </BoundingBox>
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.6" trackWidth="1.8" positionX="3.1" positionZ="0.3"/>
+          <RearAxle  maxSteering="0.0" wheelDiameter="0.6" trackWidth="1.8" positionX="0.0" positionZ="0.3"/>
+        </Axles>
+        <Properties>
+          <Property name="type"      value="simulation"/>
+          <Property name="role_name" value="adversary"/>
+        </Properties>
+      </Vehicle>
+    </ScenarioObject>
+  </Entities>
+
+  <Storyboard>
+    <Init>
+      <Actions>
+
+        <!-- Environment: always include -->
+        <GlobalAction>
+          <EnvironmentAction>
+            <Environment name="Environment1">
+              <TimeOfDay animation="false" dateTime="2020-03-20T12:00:00"/>
+              <Weather cloudState="free">
+                <Sun intensity="0.85" azimuth="0" elevation="1.31"/>
+                <Fog visualRange="100000.0"/>
+                <Precipitation precipitationType="dry" intensity="0.0"/>
+              </Weather>
+              <RoadCondition frictionScaleFactor="1.0"/>
+            </Environment>
+          </EnvironmentAction>
+        </GlobalAction>
+
+        <!-- Hero: LanePosition spawn — NEVER WorldPosition or RelativeRoadPosition
+             CCRs/CCRm/CCRb: roadId=12 laneId=-1 s=156.84 (hero behind)
+             CCFtap/CCFtab:  roadId=4  laneId=-1 s=197.98
+             CCFhos/CCFhol:  roadId=12 laneId=-1 s=156.84 -->
+        <Private entityRef="hero">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="{{ hero_road_id }}" laneId="{{ hero_lane_id }}"
+                              offset="0.0" s="{{ hero_s }}"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <!-- Init speed MUST be 0.0 — speed ramp happens in Story -->
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="0.0"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+        </Private>
+
+        <!-- Adversary: LanePosition spawn — NEVER WorldPosition or RelativeRoadPosition
+             CCRs/CCRm/CCRb: roadId=12 laneId=-1 s=193.66 (adversary ahead)
+             CCFtap/CCFtab:  roadId=12 laneId=-1 s=193.66
+             CCFhos/CCFhol:  roadId=12 laneId=1  s=193.66 (opposite lane) -->
+        <Private entityRef="adversary">
+          <PrivateAction>
+            <TeleportAction>
+              <Position>
+                <LanePosition roadId="{{ adversary_road_id }}" laneId="{{ adversary_lane_id }}"
+                              offset="0.0" s="{{ adversary_s }}"/>
+              </Position>
+            </TeleportAction>
+          </PrivateAction>
+          <PrivateAction>
+            <LongitudinalAction>
+              <SpeedAction>
+                <!-- Init speed MUST be 0.0 — speed ramp happens in Story -->
+                <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time"/>
+                <SpeedActionTarget>
+                  <AbsoluteTargetSpeed value="0.0"/>
+                </SpeedActionTarget>
+              </SpeedAction>
+            </LongitudinalAction>
+          </PrivateAction>
+        </Private>
+
+      </Actions>
+    </Init>
+
+    <Story name="AEB_Story">
+      <Act name="AEB_Act">
+
+        <!-- ManeuverGroup 1: Hero accelerates to test speed -->
+        <ManeuverGroup maximumExecutionCount="1" name="HeroAccelGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="hero"/>
+          </Actors>
+          <Maneuver name="HeroAccelManeuver">
+            <Event name="HeroAccelEvent" priority="overwrite">
+              <Action name="HeroAccelAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <!-- linear 3.0s ramp — NEVER step in Story -->
+                      <SpeedActionDynamics dynamicsShape="linear" value="3.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$heroSpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="HeroAccelStart" delay="0.0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <!-- MUST be 1.0 — NEVER 0.1 or 0.0 -->
+                      <SimulationTimeCondition value="1.0" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- ManeuverGroup 2: Adversary accelerates to target speed -->
+        <ManeuverGroup maximumExecutionCount="1" name="AdversaryAccelGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="adversary"/>
+          </Actors>
+          <Maneuver name="AdversaryAccelManeuver">
+            <Event name="AdversaryAccelEvent" priority="overwrite">
+              <Action name="AdversaryAccelAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="3.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="$adversarySpeed"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="AdversaryAccelStart" delay="0.0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="1.0" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- ManeuverGroup 3: Hero AEB brakes
+             CCR rear scenarios:    cartesianDistance value=12.0 freespace=false
+             CCF front scenarios:   cartesianDistance value=20.0 freespace=false
+             AEB brake action:      linear 3.0s to 0.0 m/s -->
+        <ManeuverGroup maximumExecutionCount="1" name="HeroAEBGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="hero"/>
+          </Actors>
+          <Maneuver name="HeroAEBManeuver">
+            <Event name="HeroAEBEvent" priority="overwrite">
+              <Action name="HeroAEBBrakeAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <!-- AEB brake: linear 3.0s — NEVER value=10.0 distance -->
+                      <SpeedActionDynamics dynamicsShape="linear" value="3.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="0.0"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="HeroAEBTrigger" delay="0.0" conditionEdge="rising">
+                    <ByEntityCondition>
+                      <TriggeringEntities triggeringEntitiesRule="any">
+                        <EntityRef entityRef="hero"/>
+                      </TriggeringEntities>
+                      <EntityCondition>
+                        <!-- CCR rear: value=12.0 | CCF front: value=20.0
+                             ALWAYS cartesianDistance, ALWAYS freespace=false -->
+                        <RelativeDistanceCondition
+                          entityRef="adversary"
+                          relativeDistanceType="cartesianDistance"
+                          value="{{ aeb_trigger_distance_m }}"
+                          freespace="false"
+                          rule="lessThan"/>
+                      </EntityCondition>
+                    </ByEntityCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <!-- ManeuverGroup 4: WaitGroup — keeps Act alive until 60s timeout
+             Without this SR exits early when all other ManeuverGroups complete -->
+        <ManeuverGroup maximumExecutionCount="1" name="WaitGroup">
+          <Actors selectTriggeringEntities="false">
+            <EntityRef entityRef="adversary"/>
+          </Actors>
+          <Maneuver name="WaitManeuver">
+            <Event name="WaitEvent" priority="overwrite">
+              <Action name="WaitAction">
+                <PrivateAction>
+                  <LongitudinalAction>
+                    <SpeedAction>
+                      <SpeedActionDynamics dynamicsShape="linear" value="1.0" dynamicsDimension="time"/>
+                      <SpeedActionTarget>
+                        <AbsoluteTargetSpeed value="0.0"/>
+                      </SpeedActionTarget>
+                    </SpeedAction>
+                  </LongitudinalAction>
+                </PrivateAction>
+              </Action>
+              <StartTrigger>
+                <ConditionGroup>
+                  <Condition name="WaitTrigger" delay="0.0" conditionEdge="rising">
+                    <ByValueCondition>
+                      <SimulationTimeCondition value="55.0" rule="greaterThan"/>
+                    </ByValueCondition>
+                  </Condition>
+                </ConditionGroup>
+              </StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+
+        <StartTrigger>
+          <ConditionGroup>
+            <Condition name="ActStartCondition" delay="0.0" conditionEdge="rising">
+              <ByValueCondition>
+                <SimulationTimeCondition value="1.0" rule="greaterThan"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StartTrigger>
+
+        <StopTrigger>
+          <ConditionGroup>
+            <Condition name="ActTimeoutCondition" delay="0.0" conditionEdge="rising">
+              <ByValueCondition>
+                <SimulationTimeCondition value="{{ timeout_s }}" rule="greaterThan"/>
+              </ByValueCondition>
+            </Condition>
+          </ConditionGroup>
+        </StopTrigger>
+
+      </Act>
+    </Story>
+
+    <!-- Global StopTrigger: criteria_CollisionTest REQUIRED
+         Without this SR exits immediately with "Nothing to analyze"
+         parameterRef MUST be "criteria_CollisionTest" not empty string
+         Do NOT include criteria_DrivenDistanceTest -->
+    <StopTrigger>
+      <ConditionGroup>
+        <Condition name="criteria_CollisionTest" delay="0.0" conditionEdge="rising">
+          <ByValueCondition>
+            <ParameterCondition parameterRef="criteria_CollisionTest" value="" rule="lessThan"/>
+          </ByValueCondition>
+        </Condition>
+      </ConditionGroup>
+    </StopTrigger>
+
+  </Storyboard>
+</OpenSCENARIO><?xml version="1.0" encoding="UTF-8"?>
+<!-- ================================
      AEB OpenSCENARIO Template (v3 - CARLA ScenarioRunner compatible)
      Family: AEB
      Output: OpenSCENARIO (.xosc)
