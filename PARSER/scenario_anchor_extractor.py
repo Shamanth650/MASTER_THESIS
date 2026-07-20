@@ -50,13 +50,13 @@ REJECT_CODES = {
 # - Car-to-Car / AEB: CCR*, CCF*, CCB*, C2C*, C2P*, C2B*
 # - VRU (Vulnerable Road User): CP* (pedestrian), CB* (bicyclist), CM* (motorcyclist)
 #   plus any internal synthetic "VRU_*" codes we create later.
-SCENARIO_PREFIXES = ("CCR", "CCF", "CCB", "C2C", "C2P", "C2B", "VRU", "CP", "CB", "CM")
+SCENARIO_PREFIXES = ("CCR", "CCF", "CCB", "CCC", "C2C", "C2P", "C2B", "VRU", "CP", "CB", "CM")
 
 # Strict code regex: must start with one of the scenario prefixes (case-insensitive)
 # and then optional letters/digits/underscore/hyphen.
 # Allow slightly longer suffix to survive OCR/export quirks, while staying conservative.
 STRICT_SCENARIO_CODE = re.compile(
-    r"^(CCR|CCF|CCB|C2C|C2P|C2B|VRU|CP|CB|CM)[A-Za-z0-9_-]{0,20}$",
+    r"^(CCR|CCF|CCB|CCC|C2C|C2P|C2B|VRU|CP|CB|CM)[A-Za-z0-9_-]{0,20}$",
     re.IGNORECASE,
 )
 
@@ -407,21 +407,48 @@ def _extract_code_and_title_from_line(line: str) -> Optional[Tuple[str, str]]:
 
     # Pattern 1b: Title (CODE) – description  [Euro NCAP scenario list format]
     # Example: "Car-to-Car Rear Stationary (CCRs) – a collision in which ..."
-    m = re.search(r"(.+?)\s*\(\s*([A-Za-z0-9_-]{3,24})\s*\)\s*[-:–—]\s*(.+)$", line)
+    # Also handles slash codes: "...moving 50% (CPRA/Cm-50) – a collision..."
+    m = re.search(r"(.+?)\s*\(\s*([A-Za-z0-9_/\-]{3,30})\s*\)\s*[-:–—]\s*(.+)$", line)
     if m:
         title = _clean(m.group(1))
-        code = _clean(m.group(2))
-        # ignore m.group(3) (description), we only need anchor title+code
-        if _looks_like_scenario_code(code) and len(title) >= 6:
-            return code, title
+        raw_code = _clean(m.group(2))
+        # For slash codes like CPRA/Cm-50, try prefix before slash first
+        code_candidates = [raw_code]
+        if "/" in raw_code:
+            code_candidates.insert(0, raw_code.split("/")[0])
+        for code in code_candidates:
+            if _looks_like_scenario_code(code) and len(title) >= 6:
+                return code, title
+
+    # Pattern 1c: VRU PDF bold definition format
+    # Example: "Car-to-Pedestrian Reverse Adult/Child moving 50% (CPRA/Cm-50)"
+    # where code contains slash -> take prefix before slash as code
+    m = re.search(r"(Car-to-[A-Za-z][A-Za-z /]+?)\s*\(\s*([A-Za-z0-9_/\-]{3,30})\s*\)", line)
+    if m:
+        title = _clean(m.group(1))
+        raw_code = _clean(m.group(2))
+        # slash codes like CPRA/Cm-50: try full, then prefix before slash
+        candidates = [raw_code]
+        if "/" in raw_code:
+            candidates.append(raw_code.split("/")[0])
+        for candidate in candidates:
+            # strip trailing digits/dash from overlap suffix e.g. CPRA/Cm-50 -> CPRA
+            clean_candidate = re.sub(r"[-/][0-9]+$", "", candidate)
+            for c in [candidate, clean_candidate]:
+                if _looks_like_scenario_code(c) and len(title) >= 6:
+                    return c, title
 
     # Pattern 2: CODE - Title  (allow _ and - in code, allow longer codes)
     m = re.search(r"^\s*([A-Za-z0-9_-]{3,24})\s*[-:–—]\s*(.+)$", line)
     if m:
         code = _clean(m.group(1))
         title = _clean(m.group(2))
+        # REJECT if title looks like a comma-separated list of scenario codes
+        # e.g. "CPNA-25, CPNA-75, CPNCO-50," is NOT a title
         if _looks_like_scenario_code(code) and len(title) >= 6:
-            return code, title
+            # Reject comma-lists: if title contains comma + another code pattern
+            if not re.search(r",\s*[A-Z]{2,6}[A-Za-z0-9_-]*", title):
+                return code, title
 
     return None
 
@@ -598,11 +625,12 @@ def _reanchor_aeb_early_definition(
     """
     i, code, title, page, block = occ
 
-    # Only AEB-style car-to-car families; VRU/LSS should not be forced to Chapter 8.
+    # Only AEB-style car-to-car families AND VRU families; LSS should not be forced to Chapter 8.
     fam = _adas_family_from_code(code)
-    if fam != "AEB":
+    if fam not in ("AEB", "VRU"):
         return occ
-    if not isinstance(page, int) or page >= 15:
+    # For AEB require early page; for VRU always try to find better block
+    if fam == "AEB" and (not isinstance(page, int) or page >= 15):
         return occ
 
     title_l = (title or "").strip().lower()
