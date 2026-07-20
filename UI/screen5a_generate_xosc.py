@@ -1,6 +1,11 @@
 # screen5a_generate_xosc.py
 import streamlit as st
 from ui_utils import navigate_to, show_progress, get_rag_functions
+from parameter_overrides import (
+    apply_overrides_to_xosc,
+    apply_canonical_corrections,
+    apply_wide_spawn_correction,
+)
 
 def show():
     show_progress()
@@ -24,11 +29,35 @@ def show():
         with st.spinner(f"Generating XOSC"):
             try:
                 xosc_code = generate_xosc(current_scenario, provider=provider)
+
+                # Apply any user-selected parameter overrides from screen5c
+                overrides = st.session_state.get("parameter_overrides", {}).get(scenario_name, {})
+                if overrides:
+                    result = apply_overrides_to_xosc(xosc_code, overrides, scenario=current_scenario)
+                    xosc_code = result["xosc"]
+                    st.session_state["override_warnings"] = result["warnings"]
+                else:
+                    st.session_state["override_warnings"] = []
+
+                # Always-run canonical trigger correction (CCFtap/CCFtab/CCCscp)
+                canonical_result = apply_canonical_corrections(xosc_code, current_scenario)
+                xosc_code = canonical_result["xosc"]
+                st.session_state["override_warnings"].extend(canonical_result["warnings"])
+
+                # Always-run wide-spawn correction (CCFhos/CCFhol only)
+                spawn_result = apply_wide_spawn_correction(xosc_code, current_scenario)
+                xosc_code = spawn_result["xosc"]
+                st.session_state["override_warnings"].extend(spawn_result["warnings"])
+
                 st.session_state.xosc_code[scenario_name] = xosc_code
                 st.success("✅ XOSC generated!")
             except Exception as e:
                 st.error(f"❌ Generation failed: {e}")
         st.session_state.auto_generate = None
+
+    # Show any override warnings from the last generation
+    for warning in st.session_state.get("override_warnings", []):
+        st.warning(f"⚠️ {warning}")
 
     # Show code + download
     if scenario_name in st.session_state.xosc_code:
@@ -67,8 +96,8 @@ def show():
     # Navigation row 1: back options
     c1, c2 = st.columns([1, 1])
     with c1:
-        if st.button("← Back to Code Generation", use_container_width=True):
-            navigate_to("generate")
+        if st.button("← Back to Parameter Review", use_container_width=True):
+            navigate_to("parameter_review")
     with c2:
         if st.button("Generate Python Instead →", use_container_width=True):
             st.session_state.auto_generate = "python"
