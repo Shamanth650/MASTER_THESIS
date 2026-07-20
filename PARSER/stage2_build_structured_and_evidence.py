@@ -462,6 +462,46 @@ def _dedupe_by_code_or_name(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         out.append(s)
     return out
 
+def _drop_umbrella_parent_scenarios(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Some Euro NCAP headings (e.g. "Car-to-Car Front Head-On (CCFho)") are umbrella
+    sections that group two or more specific sub-scenarios (e.g. CCFhos, CCFhol)
+    rather than being a distinct testable scenario in their own right.
+
+    _aliases_for_code() already encodes which parent code each specific sibling
+    implies (CCFHOS/CCFHOL -> "CCFho"). If a scenario's own code equals a parent
+    alias implied by OTHER, more specific scenario codes present in this same
+    batch, it is a redundant umbrella entry and gets dropped here.
+
+    This intentionally lives here (post-extraction, batch-aware) rather than in
+    the per-scenario enrichment prompt, because the enrichment LLM only ever
+    sees one scenario at a time and has no way to know its siblings exist.
+    """
+    codes_present = {
+        (s.get("scenario_code") or "").strip().upper()
+        for s in items
+        if s.get("scenario_code")
+    }
+
+    implied_parents = set()
+    for s in items:
+        code = (s.get("scenario_code") or "").strip().upper()
+        if not code:
+            continue
+        for alias in _aliases_for_code(code):
+            alias_u = alias.upper()
+            if alias_u != code:
+                implied_parents.add(alias_u)
+
+    out = []
+    for s in items:
+        code = (s.get("scenario_code") or "").strip().upper()
+        if code and code in implied_parents and code in codes_present:
+            continue  # redundant umbrella entry — a more specific sibling covers it
+        out.append(s)
+    return out
+
+
 def _make_structured_from_anchor(a: Dict[str, Any]) -> Dict[str, Any]:
     scenario_type = classify_adas_vs_non_adas(a)
     code = (a.get("scenario_code") or "").strip() or None
@@ -795,6 +835,7 @@ def main():
     # 2) structured scenarios
     structured = [_make_structured_from_anchor(a) for a in anchors]
     structured = _dedupe_by_code_or_name(structured)
+    structured = _drop_umbrella_parent_scenarios(structured)
 
     Path(OUT_STRUCTURED).write_text(json.dumps(structured, indent=2, ensure_ascii=False), encoding="utf-8")
 
