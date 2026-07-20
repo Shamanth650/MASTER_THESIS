@@ -12,6 +12,7 @@ import screen2_upload
 import screen3_info
 import screen4_features
 import screen5_generate
+import screen5c_parameter_review
 import screen5a_generate_xosc
 import screen5b_generate_python
 import screen6_carla_launcher
@@ -39,6 +40,8 @@ def main():
         screen4_features.show()
     elif page == 'generate':
         screen5_generate.show()
+    elif page == 'parameter_review':
+        screen5c_parameter_review.show()
     elif page == 'generate_xosc':
         screen5a_generate_xosc.show()
     elif page == 'generate_python':
