@@ -1,8 +1,53 @@
 # ================================
-# AEB RULE PACK (v4 – CARLA ScenarioRunner VALIDATED)
+# AEB RULE PACK (v7 – CARLA ScenarioRunner VALIDATED)
 # Family: AEB
 # Purpose: Guidance for code generation (Python + XOSC)
 # Validated: CARLA 0.9.15 / ScenarioRunner 0.9.16 / Town01
+#
+# v7 CHANGES (CCFtap / CCFhos / CCCscp — CCRs/CCRm/CCRb from v6 unchanged,
+# CCFhol unchanged):
+# - CCFtap trigger restored from the generic 20.0 default to 30.0, the
+#   value previously empirically confirmed working on CARLA during prior
+#   validation. This is a HIGH-CONFIDENCE fix — not new math, a restored
+#   known-good value.
+# - CCFhos trigger raised from the generic 20.0 default to 42.0. Only the
+#   hero brakes in this scenario; the adversary continues at constant
+#   speed throughout. During the hero's 3.0s brake, hero covers ~12.5m
+#   while adversary covers ~25m toward it — combined closing ~37.5m,
+#   which the old 20.0 trigger could not survive. This is a SOLID
+#   hand-verified fix (same 1D closing-distance method as CCR family)
+#   but has NOT been run on CARLA — verify before relying on it.
+# - CCCscp trigger raised from the generic 20.0 default to 48.0. This is
+#   an UNVERIFIED ESTIMATE, not a confirmed-safe value. CCCscp is a
+#   junction/crossing geometry like CCFtap, where the clean 1D
+#   closing-distance formula does not strictly apply. The 48.0 figure
+#   was scaled roughly off CCFtap's confirmed 30.0, adjusted for
+#   CCCscp's faster adversary speed (8.333 vs 3.0 m/s) — treat this as a
+#   starting point for real CARLA testing, NOT a trusted number.
+# - CCFhol left unchanged at 20.0/35.0 — matches previously documented,
+#   CARLA-validated FollowTrajectoryAction structure from prior sessions.
+#
+# v6 CHANGES (carried forward, CCRs/CCRm/CCRb only):
+# - CCRb speed corrected from 8.0 m/s (approximation) to 13.889 m/s
+#   (= 50 km/h), the actual protocol-specified fixed speed for both
+#   hero and adversary. Trigger raised to 25.0 to match.
+# - CCRm adversary (target) speed corrected from 3.0 m/s (approximation)
+#   to 5.556 m/s (= 20 km/h), the actual protocol-specified target speed.
+#   Ego speed set to 8.333 m/s (= 30 km/h), the lower verified bound of
+#   the protocol's 30-80 km/h ego range. NOTE: 80 km/h is the protocol's
+#   upper bound but is NOT used here — hand-verified closing-distance
+#   math for CCRm at 80 km/h leaves under 2m of margin at trigger=18.0
+#   and has not been re-verified on CARLA; treat 80 km/h as unresolved,
+#   not safe-by-default, until separately validated.
+# - CCRs speed/trigger are now scenario-variable across the protocol's
+#   verified AEB-range endpoints (10 and 50 km/h — the FCW sub-range,
+#   55-80 km/h, is NOT AEB-relevant and is intentionally excluded here).
+#   Default remains the lower, more conservative endpoint.
+# - Per-speed trigger values are matched using:
+#     trigger_m = 1.5 * speed_m_s + 4.0 (safety margin), rounded up.
+#   This replaces the single flat 18.0 value used in v5, which was only
+#   verified correct for the old 8.0 m/s approximation and does not hold
+#   across a range of speeds.
 # ================================
 
 [GENERAL]
@@ -96,6 +141,10 @@
   - adversary: LanePosition roadId="12" laneId="1"  s="193.66" offset="0.0"
   - adversary uses FollowTrajectoryAction (NOT LaneChangeAction — causes segfault in CARLA 0.9.15)
 
+- CCCscp (crossing, junction) — same perpendicular-road layout as CCFtap:
+  - hero:     LanePosition roadId="4"  laneId="-1" s="197.98" offset="0.0"
+  - adversary: LanePosition roadId="12" laneId="-1" s="193.66" offset="0.0"
+
 - Init speed MUST be 0.0 for ALL entities in Init phase.
 - Speed ramp MUST only happen in Story/Act ManeuverGroup, NEVER in Init.
 
@@ -103,22 +152,57 @@
 - Hero and adversary accelerate in Story using SpeedAction:
   - dynamicsShape="linear" value="3.0" dynamicsDimension="time"
   - Triggered by SimulationTimeCondition value="1.0" rule="greaterThan"
-- Speed values per scenario (m/s):
-  - CCRs:  hero=8.0,    adversary=0.0
-  - CCRm:  hero=8.0,    adversary=3.0
-  - CCRb:  hero=8.0,    adversary=8.0 (adversary brakes after)
+- Default speed values per scenario (m/s), used when no user override is given:
+  - CCRs:  hero=2.778 (10 km/h, AEB range lower bound), adversary=0.0
+  - CCRm:  hero=8.333 (30 km/h, verified), adversary=5.556 (20 km/h, actual protocol target speed)
+  - CCRb:  hero=13.889 (50 km/h, actual protocol speed), adversary=13.889 (50 km/h, matches hero — adversary brakes after)
   - CCFtap: hero=10.0,  adversary=3.0
   - CCFtab: hero=10.0,  adversary=3.0
   - CCFhos: hero=8.333, adversary=8.333
   - CCFhol: hero=8.333, adversary=8.333
+  - CCCscp: hero=10.0,  adversary=8.333
+- Verified alternate ego speed options (CCRs, CCRm only — see [XOSC / AEB BRAKING] for matching trigger):
+  - CCRs: 13.889 m/s (50 km/h, AEB range upper bound) is a verified alternate to the 2.778 default.
+  - CCRm: no verified alternate — 30 km/h (8.333 m/s) is the only ego speed currently verified safe for this scenario. Do NOT use 80 km/h (22.222 m/s) without separate re-verification.
+  - CCRb: single fixed protocol speed only, no alternate — both entities always 13.889 m/s.
+  - CCFtap/CCFhos/CCFhol/CCCscp: NO verified alternate speed options. Speed for these four
+    scenarios MUST remain at the defaults above until separately verified — do not offer
+    speed as a user-editable field for these scenarios in the UI.
 
 [XOSC / AEB BRAKING]
 - AEB braking MUST be included as a separate ManeuverGroup on hero.
-- CCR scenarios — AEB trigger:
+- CCR scenarios — AEB trigger distance MUST match the ego speed actually used, per this table
+  (trigger = 1.5 * speed_m_s + 4.0m margin, precomputed and verified below —
+  do NOT reuse one flat trigger value across different speeds):
+  - CCRs @ 2.778 m/s (10 km/h, default):  trigger value="9.0"
+  - CCRs @ 13.889 m/s (50 km/h, alternate): trigger value="25.0"
+  - CCRm @ 8.333 m/s (30 km/h, only verified option): trigger value="18.0"
+  - CCRb @ 13.889 m/s (50 km/h, fixed): trigger value="25.0"
   - RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
-    value="12.0" freespace="false" rule="lessThan"
-- CCF/head-on scenarios — AEB trigger:
+    value="<matched trigger from table above>" freespace="false" rule="lessThan"
+- CCFtap — AEB trigger (restored from prior CARLA validation, NOT the generic 20.0 default;
+  HIGH CONFIDENCE — empirically confirmed working, not new math):
   - RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+    value="30.0" freespace="false" rule="lessThan"
+- CCFtab — AEB trigger (same geometry/speed profile as CCFtap; using the same restored value
+  pending its own independent confirmation):
+  - RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+    value="30.0" freespace="false" rule="lessThan"
+- CCFhos — AEB trigger (recalculated: only hero brakes, adversary moves at constant 8.333 m/s
+  the entire time, combined closing distance during hero's 3.0s brake alone is ~37.5m — the
+  old 20.0 default could not survive this. SOLID hand-verified fix, same 1D method as CCR
+  family, but NOT yet run on CARLA — verify before relying on it):
+  - RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+    value="42.0" freespace="false" rule="lessThan"
+- CCCscp — AEB trigger (UNVERIFIED ESTIMATE ONLY. Junction/crossing geometry, same category as
+  CCFtap, where the clean 1D closing-distance formula does not strictly apply. Value scaled
+  roughly off CCFtap's confirmed 30.0, adjusted for CCCscp's faster adversary (8.333 vs
+  3.0 m/s). Treat as a starting point for real CARLA testing, NOT a trusted number):
+  - RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
+    value="48.0" freespace="false" rule="lessThan"
+- CCFhol — AEB trigger for both hero and adversary (unchanged; matches previously documented,
+  CARLA-validated FollowTrajectoryAction structure):
+  - RelativeDistanceCondition entityRef="<other entity>" relativeDistanceType="cartesianDistance"
     value="20.0" freespace="false" rule="lessThan"
 - AEB brake action (ALL scenarios):
   - SpeedAction to 0.0 m/s
