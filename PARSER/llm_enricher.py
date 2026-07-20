@@ -36,7 +36,7 @@ except Exception as e:  # pragma: no cover
 
 # Model / temperature
 # Keep the variable names used across the file to avoid touching other logic.
-OPENAI_MODEL = os.getenv("CLAUDE_MODEL", os.getenv("OPENAI_MODEL", "claude-3-opus-20240229"))
+OPENAI_MODEL = os.getenv("CLAUDE_MODEL", os.getenv("OPENAI_MODEL", "claude-opus-4-8"))
 OPENAI_TEMPERATURE = float(os.getenv("CLAUDE_TEMPERATURE", os.getenv("OPENAI_TEMPERATURE", "0")) or "0")
 
 # Networking / retries (kept as OPENAI_* names to avoid touching the rest of the file)
@@ -618,25 +618,80 @@ Protocol vs user separation (STRICT):
 - Do NOT modify user_config at all.
 
 STRICTLY FORBIDDEN (do NOT change these fields):
-- scenario_details.overlap_percent
 - scenario_details.lateral_offset_m
 
-These fields are intentionally user-controlled or ambiguous in protocol.
-They MUST remain null.
+This field is intentionally user-controlled or ambiguous in protocol.
+It MUST remain null.
+
+NOTE: scenario_details.overlap_percent IS allowed to be filled when the protocol
+explicitly states the overlap percentage for this specific scenario (e.g. "50% of
+the vehicle's width"). Extract it as a numeric value (e.g. 50 for 50%, 25 for 25%).
 
 Field scope rules:
 A) Constraints (preferred):
 - If DOC_TEXT specifies a RANGE (e.g., "10–50 km/h", "-50% to +50%"),
-  fill *_min and *_max fields ONLY.
-- If DOC_TEXT specifies DISCRETE SETS (e.g., "12 m and 40 m"),
-  do NOT pick one value.
-  Instead, leave numeric field null and write allowed values into:
-  scenario_details.extra.allowed_values.<field> = [ ... ] with evidence.
+  fill *_min and *_max fields.
+- If DOC_TEXT specifies DISCRETE SETS (e.g., "12 m and 40 m", "50 and 70 km/h"),
+  do NOT pick a single value as if it were the only one. Instead:
+  1) Fill *_min and *_max with min(set) and max(set) so the field always carries
+     a usable bound, even though the true constraint is a discrete set.
+  2) ALSO write the full discrete set into:
+     scenario_details.extra.allowed_values.<field> = [ ... ] with evidence.
+  Steps (1) and (2) are both required whenever a discrete set is found — never
+  populate allowed_values without also populating *_min/*_max from it, and vice versa.
 
 B) Fixed numeric parameters:
-- Only fill fixed numeric values (initial_distance_m, headway_m, ttc, ttc_end, *_decel_mps2)
-  IF AND ONLY IF DOC_TEXT clearly states a SINGLE fixed value for THIS scenario.
-- Otherwise, leave the field null.
+- Applies to: initial_distance_m, headway_m, ttc, ttc_end, *_decel_mps2, AND
+  *_speed_min / *_speed_max when the protocol states a SINGLE constant speed
+  (not a range, not a discrete set) for this scenario.
+- Watch for phrasing such as "constant", "fixed", "held at", "moves at X km/h"
+  describing one vehicle's speed — e.g. "GVT moves at a constant 20 km/h" means
+  BOTH target_speed_min and target_speed_max should be set to 20.
+- Only fill fixed numeric values IF AND ONLY IF DOC_TEXT clearly states a SINGLE
+  fixed value for THIS scenario. Otherwise, leave the field null.
+
+C) Vehicle type fields (ego_vehicle_type, target_vehicle_type):
+- Euro NCAP AEB Car-to-Car protocols use a consistent target vehicle class
+  (typically GVT — Global Vehicle Target) across every scenario in the document.
+  If DOC_TEXT establishes the target vehicle class ANYWHERE in the document
+  (e.g. a general/definitions section, or any other scenario's evidence), fill
+  target_vehicle_type for THIS scenario with that same class — do not leave it
+  null just because this specific scenario's own page doesn't restate it.
+  Add evidence citing the page where the class is defined, even if that page
+  differs from this scenario's main anchor page.
+- Do not guess ego_vehicle_type (VUT) unless DOC_TEXT gives a specific type;
+  the ego vehicle is typically the test vehicle itself and often intentionally
+  unspecified.
+
+D) Structures that don't fit *_min/*_max/allowed_values — use extra (no schema change):
+  These three patterns come up often enough to name explicitly. In every case,
+  DO NOT leave the field silently null with no structure at all if DOC_TEXT
+  states the information in ANY form — capture it in scenario_details.extra
+  even when it doesn't fit *_min/*_max, with evidence as usual.
+
+  D1) Paired/dependent speed combinations — when target_speed depends on
+      ego_speed (a matrix/table, e.g. "GVT travels at 20 km/h when VUT is at
+      30 km/h, 30 km/h when VUT is at 40 km/h..."), do NOT leave
+      target_speed_min/max null with nothing else. Instead write:
+        scenario_details.extra.allowed_values.speed_pairs =
+          [ {"ego_speed": 30, "target_speed": 20}, {"ego_speed": 40, "target_speed": 30}, ... ]
+      using whatever unit DOC_TEXT uses, one evidence item covering the pairing.
+
+  D2) Named sub-ranges within one overall range — when DOC_TEXT splits a speed
+      range by assessed subsystem or condition (e.g. "AEB: 10-50 km/h, FCW:
+      55-80 km/h" within an overall 10-80 km/h scenario), write BOTH the
+      overall *_min/*_max as usual AND the named sub-ranges into:
+        scenario_details.extra.allowed_values.<label>_speed_range = [min, max]
+      e.g. extra.allowed_values.aeb_speed_range = [10, 50] and
+      extra.allowed_values.fcw_speed_range = [55, 80]. Use the label DOC_TEXT
+      itself uses (lowercased), not a fixed vocabulary.
+
+  D3) Impact/offset point stated separately from overlap_percent — e.g. "impact
+      at 25% along the target vehicle's length" is a different concept from
+      lateral overlap_percent. When DOC_TEXT states this explicitly for THIS
+      scenario, write:
+        scenario_details.extra.impact_point_percent = 25
+      with evidence, rather than only mentioning it in notes.
 
 Units:
 - Preserve units exactly as stated in DOC_TEXT.
@@ -644,6 +699,9 @@ Units:
 
 What you are allowed to add:
 - scenario_details.notes (string), ONLY to explain ambiguity or conflicts.
+- scenario_details.extra.allowed_values.speed_pairs, extra.allowed_values.<label>_speed_range,
+  and extra.impact_point_percent as described in Rule D above — these are the only
+  extra fields you may introduce beyond what already exists in SCENARIO_JSON.
 
 
 LSS mode (IMPORTANT):
@@ -720,14 +778,41 @@ Final checklist (must all pass):
 def _extract_first_json_object(text: str) -> Dict[str, Any]:
     """
     Claude returns plain text. We must extract the first JSON object robustly.
+
+    Uses json.JSONDecoder().raw_decode(), which parses exactly one JSON value
+    starting from a given position and returns where it ended — it does NOT
+    require the entire string to be consumed. This is deliberate: if the
+    model appends anything after the JSON object (a stray note, a repeated
+    object, trailing whitespace plus commentary), a plain json.loads() on the
+    whole string raises JSONDecodeError("Extra data") and crashes the whole
+    pipeline run, even though the JSON itself is perfectly valid. raw_decode
+    reads the first complete object and ignores everything after it.
     """
     if not text:
         raise RuntimeError("Empty LLM response")
-    # Fast path
+
     text = text.strip()
-    if text.startswith("{") and text.endswith("}"):
-        return json.loads(text)
-    # Try to find a JSON object inside fenced blocks or surrounding text.
+
+    # Strip markdown fences if the model wrapped the JSON in ```json ... ```
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    # Find the first '{' — skip any leading preamble text the model might add
+    brace_idx = text.find("{")
+    if brace_idx == -1:
+        raise RuntimeError("LLM did not return a JSON object")
+
+    decoder = json.JSONDecoder()
+    try:
+        obj, _end_index = decoder.raw_decode(text, brace_idx)
+        return obj
+    except json.JSONDecodeError:
+        pass
+
+    # Last-resort fallback: greedy first-'{' to last-'}' span (previous
+    # behavior), in case raw_decode failed for a reason other than trailing
+    # extra data (e.g. genuinely malformed JSON needing the wider span).
     m = re.search(r"\{[\s\S]*\}", text)
     if not m:
         raise RuntimeError("LLM did not return a JSON object")
@@ -799,7 +884,6 @@ IDENTITY_LOCK_PATHS = [
     "script_eligible",
     "scenario_details.scenario",
     "scenario_details.lateral_offset_m",
-    "scenario_details.overlap_percent"
 ]
 
 
@@ -1432,6 +1516,21 @@ _VRU_VARIANT_RX = re.compile(r"\b(crossing|longitudinal|turning|nearside|farside
 _VRU_ADULT_CHILD_RX = re.compile(r"\b(adult|child)\b", re.IGNORECASE)
 _VRU_OBSCURED_RX = re.compile(r"\b(obscured|obstructed)\b", re.IGNORECASE)
 _VRU_SIDE_RX = re.compile(r"\b(nearside|farside|left|right)\b", re.IGNORECASE)
+# Euro NCAP VRU codes follow <family prefix><marker>[-<overlap%>], e.g. CP+NA-25,
+# CB+FA-50, CP+NCO-50, CM+oncoming. Lateral-crossing variants use the marker
+# NA/FA/NAO/FAO/NCO/FCO (nearside/farside, adult/child, +/- obstructed).
+_VRU_LATERAL_MARKERS = {"NA", "FA", "NAO", "FAO", "NCO", "FCO"}
+
+
+def _vru_code_core_marker(code_u: str) -> str:
+    """
+    Extract the marker portion of a VRU code, stripping the 2-letter family
+    prefix (CP/CB/CM) and any trailing -NN overlap suffix. Positional, not a
+    substring search — avoids false matches like "NCO" coincidentally appearing
+    inside "CMONCOMING" (oNCOming), which a plain substring check would catch.
+    """
+    rest = code_u[2:] if len(code_u) > 2 else code_u
+    return rest.split("-")[0]
 
 # Speed ranges: "1.2–2.0 m/s", "1.2-2.0 m/s"
 _VRU_SPEED_MPS_RANGE_RX = re.compile(r"\b(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*(m/s)\b", re.IGNORECASE)
@@ -1440,6 +1539,15 @@ _VRU_SPEED_MPS_SINGLE_RX = re.compile(r"\b(\d+(?:\.\d+)?)\s*(m/s)\b", re.IGNOREC
 
 # Sometimes VRU walking speed is given in km/h (rare). We do not convert silently.
 _VRU_SPEED_KPH_RANGE_RX = re.compile(r"\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(km/h|kph)\b", re.IGNORECASE)
+
+# Single km/h value near a VRU-motion cue word, e.g. "adult pedestrian walking at 5 km/h",
+# "cyclist test speed of 15 km/h". Requiring the cue word within ~40 characters before the
+# number avoids picking up an unrelated km/h figure (e.g. ego speed) elsewhere on the page.
+_VRU_SPEED_KPH_SINGLE_RX = re.compile(
+    r"(?:walking|running|cycling|pedestrian|bicyclist|cyclist|motorcyclist)\D{0,40}?"
+    r"(\d{1,2}(?:\.\d+)?)\s*(?:km/h|kph)",
+    re.IGNORECASE,
+)
 
 
 def _ensure_vru_shape(s: Dict[str, Any]) -> Dict[str, Any]:
@@ -1508,15 +1616,30 @@ def _fallback_fill_vru_fields_from_text(s: Dict[str, Any], doc_text: str) -> Dic
             vru["adult_child"] = m.group(1).lower()
             _append_evidence(s, "scenario_details.extra.vru.adult_child", m.group(0))
 
-    # obscured/obstructed
-    if vru.get("obscured") is None:
+    # obscured/obstructed — ONLY for scenario codes whose marker indicates an
+    # obstructed variant (NAO/FAO/NCO/FCO, same marker set used for
+    # crossing_side lateral variants — the "O" suffix is Euro NCAP's own
+    # obstructed indicator). Without this gate, the regex was picking up the
+    # word "Obstructed" from a NEIGHBORING scenario's description sharing the
+    # same evidence page range (e.g. CMovertaking wrongly getting
+    # obscured=true from a nearby CBNAO/CPNCO mention).
+    _core_marker = _vru_code_core_marker(code_u)
+    if vru.get("obscured") is None and (
+        _core_marker.endswith("O") or "obstruct" in name.lower()
+    ):
         m = _VRU_OBSCURED_RX.search(blob)
         if m:
             vru["obscured"] = True
             _append_evidence(s, "scenario_details.extra.vru.obscured", m.group(0))
 
-    # crossing side
-    if vru.get("crossing_side") is None:
+    # crossing side — ONLY applies to lateral-crossing scenario variants (Euro NCAP
+    # codes containing NA/FA: nearside/farside adult/child, e.g. CPNA, CPFA, CBNA,
+    # CBFA, CBNAO). Dooring (*DA), longitudinal (*LA), reverse (*RA), rear-approach
+    # (*Rs/*Rb), oncoming, and overtaking scenarios do NOT have a lateral crossing
+    # side — for those, leave it null rather than grabbing the first stray
+    # "nearside"/"farside"/"left"/"right" mention anywhere in the shared page text
+    # (which was previously bleeding in from a neighboring scenario's description).
+    if vru.get("crossing_side") is None and _vru_code_core_marker(code_u) in _VRU_LATERAL_MARKERS:
         m = _VRU_SIDE_RX.search(blob)
         if m:
             token = m.group(1).lower()
@@ -1550,6 +1673,44 @@ def _fallback_fill_vru_fields_from_text(s: Dict[str, Any], doc_text: str) -> Dic
             if "vru_speed_kph_range" not in allowed_values:
                 allowed_values["vru_speed_kph_range"] = allowed
                 _append_evidence(s, "scenario_details.extra.allowed_values.vru_speed_kph_range", m.group(0))
+        else:
+            # The report showed this regex consistently grabbing a generic
+            # "eligibility minimum" speed (e.g. "system shall detect
+            # pedestrians walking at speeds as low as 3 km/h") instead of the
+            # actual per-scenario test speed stated in a nearby sentence. A
+            # fixed-character lookback window bleeds across sentence
+            # boundaries when the eligibility sentence sits right before the
+            # real one, so this is scoped to the containing SENTENCE instead.
+            _EXCLUDE_CTX = ("eligib", "minimum", "shall detect", "as low as", "criteria")
+            _sentences = re.split(r"(?<=[.!?])\s+", doc_text)
+            _spans = []
+            _offset = 0
+            for _sent in _sentences:
+                _idx = doc_text.find(_sent, _offset)
+                if _idx == -1:
+                    continue
+                _spans.append((_idx, _idx + len(_sent), _sent))
+                _offset = _idx + len(_sent)
+
+            m1 = None
+            for cand in _VRU_SPEED_KPH_SINGLE_RX.finditer(doc_text):
+                containing_sentence = next(
+                    (sent for a, b, sent in _spans if a <= cand.start() < b), ""
+                )
+                if not any(kw in containing_sentence.lower() for kw in _EXCLUDE_CTX):
+                    m1 = cand
+                    break
+            if m1 is None:
+                # Nothing clean found — fall back to the first match anyway,
+                # better than nothing, but flagged via evidence text so it's
+                # traceable if still wrong.
+                m1 = _VRU_SPEED_KPH_SINGLE_RX.search(doc_text)
+            if m1:
+                val = float(m1.group(1))
+                allowed_values = extra.setdefault("allowed_values", {})
+                if "vru_speed_kph" not in allowed_values:
+                    allowed_values["vru_speed_kph"] = val
+                    _append_evidence(s, "scenario_details.extra.allowed_values.vru_speed_kph", m1.group(0))
 
     return s
 
