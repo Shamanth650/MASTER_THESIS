@@ -69,6 +69,12 @@ def init_session_state():
     if 'current_scenario_idx' not in st.session_state:
         st.session_state.current_scenario_idx = 0
 
+    # Parameter override screen (screen5c)
+    if 'pending_generation_target' not in st.session_state:
+        st.session_state.pending_generation_target = 'xosc'
+    if 'parameter_overrides' not in st.session_state:
+        st.session_state.parameter_overrides = {}  # scenario_name -> {field: value}
+
 # -------------------------
 # Navigation Functions
 # -------------------------
