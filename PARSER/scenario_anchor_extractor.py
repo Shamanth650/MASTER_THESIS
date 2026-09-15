@@ -32,6 +32,14 @@ IMPORTANT FIX (2026-01-02 / follow-up):
 - Handle the Euro NCAP scenario list format:
     "Car-to-Car Rear Stationary (CCRs) – a collision in which ..."
   (i.e., Title (CODE) followed by dash/description on the same line)
+
+------------------------------------------------------------
+Responsible for: Scanning raw protocol text to find scenario "anchors"
+(scenario code + name) for AEB, VRU, and LSS families, picking the best
+occurrence of each anchor (favoring parameter-table-rich sections over
+early definitions), and classifying each anchor as ADAS or NON_ADAS.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 from __future__ import annotations
 
@@ -61,6 +69,8 @@ STRICT_SCENARIO_CODE = re.compile(
 )
 
 
+# Looks at a scenario code's prefix (VRU/CP/CB/CM, CCR/CCF/CCB/C2*, or
+# LSS_) and returns the corresponding ADAS family label, or None if unrecognized.
 def _adas_family_from_code(code: str) -> Optional[str]:
     """Map a scenario code to an ADAS family label used downstream."""
     c = (code or "").strip().upper()
@@ -155,6 +165,9 @@ _LSS_NEGATIVE_PHRASES = (
 _LSS_MIN_SCORE = 6
 
 
+# Scores a candidate LSS heading line based on structural cues (section
+# numbers, scenario/test phrasing, system-specific sub-scenario terms) minus
+# penalties for glossary/definition language, to gauge if it's a real anchor.
 def _lss_score_title(title: str, system: Optional[str]) -> int:
     t = _clean(title).lower()
     score = 0
@@ -190,11 +203,15 @@ def _lss_score_title(title: str, system: Optional[str]) -> int:
     return score
 
 
+# Applies the minimum-score threshold to _lss_score_title's result to
+# decide, deterministically, whether a line qualifies as a real LSS anchor.
 def _is_valid_lss_anchor_title(title: str, system: Optional[str]) -> bool:
     # Keep it deterministic and conservative.
     return _lss_score_title(title, system) >= _LSS_MIN_SCORE
 
 
+# Detects which LSS system (ELK/LKA/LDW/BSM) a line refers to, falling
+# back to the previously known system context if the line mentions none.
 def _lss_system_from_line(line: str, prev_system: Optional[str]) -> Optional[str]:
     """Infer current LSS system context from a line and previous context."""
     line_c = _clean(line)
@@ -215,12 +232,17 @@ def _lss_system_from_line(line: str, prev_system: Optional[str]) -> Optional[str
     return prev_system
 
 
+# Converts a string into an uppercase, underscore-separated slug suitable
+# for building a compact synthetic scenario code.
 def _slug(s: str) -> str:
     s = re.sub(r"[^A-Za-z0-9]+", "_", (s or "").strip())
     s = re.sub(r"_+", "_", s).strip("_")
     return s.upper()
 
 
+# Cleans a line (stripping numeric section prefixes and rejecting
+# figure/table captions), checks it looks like a plausible LSS sub-scenario
+# heading, and returns the cleaned title text if it passes the scoring gate.
 def _extract_lss_title(line: str, system_ctx: Optional[str] = None) -> Optional[str]:
     """Extract a clean LSS scenario title from a line."""
     line_c = _clean(line)
@@ -258,11 +280,16 @@ def _extract_lss_title(line: str, system_ctx: Optional[str] = None) -> Optional[
     return line_c
 
 
+# Builds a stable, compact synthetic scenario code for an LSS sub-scenario
+# by combining a truncated slug of the system name and the title.
 def _build_lss_code(system: str, title: str) -> str:
     # Stable and compact synthetic code (kept short to survive downstream tooling)
     return f"LSS_{_slug(system)[:8]}_{_slug(title)[:18]}"
 
 
+# Scans document lines tracking the current LSS system context, extracts
+# and de-duplicates candidate sub-scenario titles, and builds anchor dicts
+# (with synthetic codes and surrounding text blocks) for each one found.
 def extract_lss_anchors(
     text: str,
     *,
@@ -355,10 +382,14 @@ def extract_lss_anchors(
     return anchors
 
 
+# Collapses any run of whitespace in a string down to a single space and
+# strips leading/trailing whitespace.
 def _clean(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip())
 
 
+# Checks a line against the known page-marker patterns and returns the
+# page number it declares, or None if the line isn't a page marker.
 def _page_from_line(line: str) -> Optional[int]:
     for rx in _PAGE_MARKERS:
         m = rx.search(line or "")
@@ -370,6 +401,8 @@ def _page_from_line(line: str) -> Optional[int]:
     return None
 
 
+# Checks a candidate code against the strict scenario-prefix regex and the
+# reject list, returning True only for codes that plausibly are real scenario codes.
 def _looks_like_scenario_code(code: str) -> bool:
     """
     STRICT acceptance:
@@ -384,6 +417,9 @@ def _looks_like_scenario_code(code: str) -> bool:
     return bool(STRICT_SCENARIO_CODE.match(code))
 
 
+# Tries several regex patterns (Title (CODE), CODE - Title, VRU slash-code
+# variants, etc.) against a line to pull out a plausible (code, title) pair,
+# validating each candidate against _looks_like_scenario_code.
 def _extract_code_and_title_from_line(line: str) -> Optional[Tuple[str, str]]:
     """
     Try patterns like:
@@ -454,6 +490,8 @@ def _extract_code_and_title_from_line(line: str) -> Optional[Tuple[str, str]]:
 
 
 
+# Counts how many numeric tokens (e.g. "50", "1.5", "10%") appear in a
+# string, used as a signal that a text block is a parameter/data table.
 def _count_numeric_tokens(s: str) -> int:
     # Count numeric tokens like 50, 50.0, 1.5, 10%, etc.
     if not s:
@@ -461,6 +499,9 @@ def _count_numeric_tokens(s: str) -> int:
     return len(re.findall(r"\b\d+(?:\.\d+)?%?\b", s))
 
 
+# Scores one occurrence of an anchor by rewarding parameter-table keywords,
+# numeric density, and table/figure references, while penalizing
+# glossary/definition language, so the "real" data-bearing occurrence wins.
 def _anchor_occurrence_score(code: str, title: str, block: str, page: Optional[int]) -> float:
     """Heuristic score to choose the *best* occurrence of a scenario anchor.
 
@@ -534,6 +575,9 @@ def _anchor_occurrence_score(code: str, title: str, block: str, page: Optional[i
     return score
 
 
+# Groups all occurrences by scenario code, scores each with
+# _anchor_occurrence_score, and picks the best one per code -- preferring
+# the latest page among multiple "strong" candidates, else the highest score.
 def _pick_best_anchor_occurrences(
     occurrences: List[Tuple[int, str, str, Optional[int], str]],
 ) -> List[Tuple[int, str, str, Optional[int], str]]:
@@ -604,6 +648,10 @@ def _pick_best_anchor_occurrences(
     chosen.sort(key=lambda x: x[0])
     return chosen
 
+# For an AEB/VRU anchor detected suspiciously early (a likely
+# definitions-section mention), searches forward for a later, more
+# parameter-rich occurrence (title hit, code hit, or Chapter-8 heading) and
+# rebuilds the anchor's text block around that better location if found.
 def _reanchor_aeb_early_definition(
     lines: List[str],
     pages_for_line: List[Optional[int]],
@@ -692,6 +740,10 @@ def _reanchor_aeb_early_definition(
     new_block = "\n".join(lines[start:end]).strip()
     return (best_idx, code, title, best_page, new_block)
 
+# Main AEB/VRU extraction routine: finds all candidate anchor lines
+# (merging split title/code lines), builds a text block per occurrence,
+# picks the best occurrence per code, re-anchors early AEB definitions to
+# later sections, and returns the finished list of anchor dicts.
 def extract_scenario_anchors(
     text: str,
     *,
@@ -815,6 +867,9 @@ def extract_scenario_anchors(
 
 
 
+# Decides whether an anchor is ADAS-related by checking its anchor_type,
+# adas_family, and finally whether its scenario code matches the strict
+# scenario-code pattern; anything else is classified NON_ADAS.
 def classify_adas_vs_non_adas(anchor: Dict) -> str:
     """
     Minimal rule (UPDATED for LSS/VRU):
