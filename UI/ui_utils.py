@@ -2,6 +2,14 @@
 """
 Common utilities, session state management, and helper functions
 shared across all UI screens.
+
+------------------------------------------------------------
+Responsible for: Providing the shared building blocks every screen relies
+on -- session-state initialization, page navigation, the step-progress
+indicator, scenario-dict helper accessors, global CSS styling, and lazy
+imports of the RAG generation and PDF parser functions.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -26,6 +34,9 @@ load_dotenv()
 # -------------------------
 # Session State Management
 # -------------------------
+# Sets up every session-state key the app relies on (page, standard,
+# PDF data, parsed/selected scenarios, generated code, provider, parameter
+# overrides) with its default value, only if not already present.
 def init_session_state():
     """Initialize all session state variables"""
     
@@ -78,11 +89,14 @@ def init_session_state():
 # -------------------------
 # Navigation Functions
 # -------------------------
+# Switches session state's current page to the given page name and
+# triggers a Streamlit rerun so the new screen renders immediately.
 def navigate_to(page: str):
     """Navigate to a specific page"""
     st.session_state.page = page
     st.rerun()
 
+# Returns the name of the page currently stored in session state.
 def get_current_page() -> str:
     """Get current page name"""
     return st.session_state.page
@@ -90,6 +104,9 @@ def get_current_page() -> str:
 # -------------------------
 # Progress Indicator
 # -------------------------
+# Renders the horizontal step-progress bar (Standards/Upload/Info/
+# Features/Generate), marking each step as done, current, or todo based on
+# where the current page falls in the sequence; does nothing on other pages.
 def show_progress():
     """Show which step the user is on (with CSS hooks)"""
     pages = ['standards', 'upload', 'info', 'features', 'generate']
@@ -107,17 +124,17 @@ def show_progress():
         with col:
             if i < current_idx:
                 st.markdown(
-                    f"<div class='step done' data-step='{page_key}'>⚪<span>{name}</span></div>",
+                    f"<div class='step done' data-step='{page_key}'><span>{name}</span></div>",
                     unsafe_allow_html=True
                 )
             elif i == current_idx:
                 st.markdown(
-                    f"<div class='step current' data-step='{page_key}'>⚪ <span>{name}</span></div>",
+                    f"<div class='step current' data-step='{page_key}'><span>{name}</span></div>",
                     unsafe_allow_html=True
                 )
             else:
                 st.markdown(
-                    f"<div class='step todo' data-step='{page_key}'>⚪ <span>{name}</span></div>",
+                    f"<div class='step todo' data-step='{page_key}'><span>{name}</span></div>",
                     unsafe_allow_html=True
                 )
 
@@ -128,6 +145,8 @@ def show_progress():
 # -------------------------
 # Helper Functions
 # -------------------------
+# Returns a scenario's display name, checking "name" then "scenario_name",
+# falling back to a generic "Scenario N" label if neither is set.
 def get_scenario_name(scenario: Dict[str, Any], idx: int = 0) -> str:
     """Get scenario name from scenario dict"""
     return (
@@ -136,11 +155,14 @@ def get_scenario_name(scenario: Dict[str, Any], idx: int = 0) -> str:
         f'Scenario {idx + 1}'
     )
 
+# Returns a scenario's ADAS family (AEB/LSS/VRU) from its classification
+# block, or "UNKNOWN" if not set.
 def get_scenario_family(scenario: Dict[str, Any]) -> str:
     """Get scenario family (AEB, LSS, VRU)"""
     classification = scenario.get('classification', {})
     return classification.get('family', 'UNKNOWN')
 
+# Returns a scenario's classification variant, or "unknown" if not set.
 def get_scenario_variant(scenario: Dict[str, Any]) -> str:
     """Get scenario variant"""
     classification = scenario.get('classification', {})
@@ -149,11 +171,15 @@ def get_scenario_variant(scenario: Dict[str, Any]) -> str:
 # -------------------------
 # Styling
 # -------------------------
+# Injects the app's global CSS: hides Streamlit's default chrome (header,
+# menu, footer) and sets the page background to the app's logo/background
+# images, base64-encoded and embedded inline.
 def apply_custom_css():
     bg_path = Path("/home/shamanth/clean_euro/UI/assets/bg.jpg")
     top_logo = Path("/home/shamanth/clean_euro/UI/assets/log.png")
     bottom_logo = Path("/home/shamanth/clean_euro/UI/assets/logo2.png")
 
+    # Reads an image file and returns its base64-encoded contents as a string.
     def b64(p): 
         return base64.b64encode(p.read_bytes()).decode()
 
@@ -199,14 +225,19 @@ def apply_custom_css():
 # -------------------------
 # RAG Generation Functions
 # -------------------------
+# Lazily imports the RAG orchestrator and wraps it into two convenience
+# functions returning just the Python or just the XOSC artifact for a
+# scenario; returns (None, None) if the RAG modules can't be imported.
 def get_rag_functions():
     """Get RAG generation functions"""
     try:
         from RAG2.generators.orchestrator import generate_scenario_artifacts
 
+        # Generates the full artifact set for a scenario and returns only the CARLA Python script.
         def generate_python(scenario, *, k=None, provider="claude"):
             return generate_scenario_artifacts(scenario, k=k, provider=provider)["carla_py"]
 
+        # Generates the full artifact set for a scenario and returns only the XOSC file.
         def generate_xosc(scenario, *, k=None, provider="claude"):
             return generate_scenario_artifacts(scenario, k=k, provider=provider)["xosc"]
         
@@ -219,6 +250,8 @@ def get_rag_functions():
 # -------------------------
 # Parser Functions
 # -------------------------
+# Lazily imports and returns the PARSER pipeline's entry point function,
+# or None if the PARSER package can't be imported.
 def get_parser_function():
     """Get PDF parser function"""
     try:
