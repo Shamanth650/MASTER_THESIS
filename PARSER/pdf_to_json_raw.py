@@ -1,3 +1,13 @@
+# ============================================================
+# Script: pdf_to_json_raw.py
+# Responsible for: Scanning the "Parsed_Data" folder (produced by an
+# earlier PDF-parsing stage) and consolidating its extracted text
+# files and image metadata (page/table/diagram images) into a single
+# raw knowledge-base JSON file (knowledge_base_raw.json) for
+# downstream processing.
+# Maintainer: shamanth.adiga@ltts.com
+# ============================================================
+
 import os
 import json
 import re
@@ -20,6 +30,8 @@ OUTPUT_JSON = os.path.join(SCRIPT_DIR, "knowledge_base_raw.json")
 # HELPERS
 # ============================================================
 
+# Extracts the page number embedded in an image filename (e.g. "_p12").
+# Returns None if no page-number pattern is found in the filename.
 def extract_page_number(filename: str):
     """
     Extract page number from filenames like:
@@ -31,6 +43,8 @@ def extract_page_number(filename: str):
     return int(match.group(1)) if match else None
 
 
+# Reads every .txt file in the given folder and wraps its content in a
+# knowledge-base entry dict. Returns an empty list if the folder is missing.
 def load_text_files(folder: str):
     entries = []
 
@@ -54,6 +68,8 @@ def load_text_files(folder: str):
     return entries
 
 
+# Scans an image directory and builds metadata-only entries (no pixel
+# data) for each image, tagging each with its page number and image type.
 def load_image_metadata(image_dir: str, image_type: str):
     """
     image_type:
@@ -90,6 +106,8 @@ def load_image_metadata(image_dir: str, image_type: str):
 # MAIN
 # ============================================================
 
+# Orchestrates the full build: gathers text entries and all three image
+# categories, then writes the combined list out to knowledge_base_raw.json.
 def build_knowledge_base():
     knowledge_base = []
 
