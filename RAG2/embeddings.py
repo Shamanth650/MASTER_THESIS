@@ -10,6 +10,12 @@ Inputs:
 
 Outputs:
 - List[List[float]] embeddings (one vector per input text)
+
+------------------------------------------------------------
+Responsible for: Generating text embeddings for a batch of strings via the
+OpenAI embeddings API, using the model configured in RAG2.config.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -22,6 +28,8 @@ from openai import OpenAI
 from .config import OPENAI_EMBED_MODEL
 
 
+# Sends a batch of texts to the OpenAI embeddings API and returns their
+# vectors in the same order as the input, raising if no API key is configured.
 def embed_texts(texts: List[str]) -> List[List[float]]:
     """
     Create embeddings for a batch of texts using the configured embedding model.
