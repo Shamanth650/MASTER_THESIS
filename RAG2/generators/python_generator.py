@@ -7,6 +7,14 @@ FIXED VERSION:
 - Relaxed validation that accepts semantically correct code regardless of formatting
 - Pattern matching is flexible and checks for intent rather than exact syntax
 - Supports various LLM output styles (Claude, GPT, etc.)
+
+------------------------------------------------------------
+Responsible for: Generating (and, for AEB, validating and retrying) the
+CARLA ScenarioRunner Python module for a scenario -- retrieving supporting
+context from Chroma, prompting the LLM, and running relaxed semantic
+checks on the AEB output before accepting it.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -36,6 +44,9 @@ _AEB_VARIANT_PATTERNS = [
 ]
 
 
+# Infers the AEB scenario variant by checking, in order: runtime_hints,
+# user_config.behavior.scenario_variant, classification.variant, then a
+# regex match against the scenario name; returns "unknown" if none match.
 def _infer_aeb_variant_key(scenario: Dict[str, Any]) -> str:
     """
     Tries multiple places to infer the AEB variant.
@@ -63,6 +74,9 @@ def _infer_aeb_variant_key(scenario: Dict[str, Any]) -> str:
     return "unknown"
 
 
+# Appends the previous attempt's validation errors plus explicit
+# ScenarioRunner correctness rules (behavior-tree pattern, trigger type,
+# speed handling) to the prompt, to give the LLM's retry a real chance of fixing them.
 def _augment_user_prompt_with_errors(user_prompt: str, errors: List[str], scenario: Dict[str, Any]) -> str:
     """
     Strong retry instruction so the 2nd attempt actually fixes ScenarioRunner behavior.
@@ -98,6 +112,8 @@ def _augment_user_prompt_with_errors(user_prompt: str, errors: List[str], scenar
     )
 
 
+# Searches the generated code for a literal numeric assignment to
+# `self.<attr>` (as a bare number or wrapped in float(...)) and returns it as a float, or None if not found.
 def _extract_literal_assignment(code: str, attr: str) -> Optional[float]:
     """Extract a literal float assignment to self.attr"""
     patterns = [
@@ -114,6 +130,7 @@ def _extract_literal_assignment(code: str, attr: str) -> Optional[float]:
     return None
 
 
+# Coerces a value to an uppercase, stripped string, treating None as an empty string.
 def _force_upper(v: Any) -> str:
     if v is None:
         return ""
@@ -122,6 +139,8 @@ def _force_upper(v: Any) -> str:
     return v.strip().upper()
 
 
+# Reads and normalizes the scenario's trigger type to uppercase
+# (START_IMMEDIATELY/TTC/DISTANCE), or "" if not set.
 def _infer_trigger_type(scenario: Dict[str, Any]) -> str:
     """
     Returns normalized trigger type:
@@ -130,6 +149,7 @@ def _infer_trigger_type(scenario: Dict[str, Any]) -> str:
     return _force_upper(_get_path(scenario, "user_config.trigger.type", ""))
 
 
+# Checks whether the generated code uses py_trees' Parallel composite pattern.
 def _code_uses_parallel(code: str) -> bool:
     """Check if code uses Parallel composite pattern"""
     if "py_trees.composites.Parallel" in code:
@@ -139,11 +159,16 @@ def _code_uses_parallel(code: str) -> bool:
     return False
 
 
+# Checks whether the generated code uses py_trees' Sequence composite pattern.
 def _code_uses_sequence(code: str) -> bool:
     """Check if code uses Sequence composite pattern"""
     return ("py_trees.composites.Sequence" in code) or bool(re.search(r"\bSequence\s*\(", code))
 
 
+# Relaxed heuristic checking that the ego vehicle's speed is actually
+# applied through a driving behavior (WaypointFollower, KeepVelocity,
+# direct control, or autopilot) rather than just read from config and
+# ignored, tolerating varied LLM output styles.
 def _ego_speed_applied(code: str) -> bool:
     """
     FIXED: Relaxed heuristic checking if ego speed is applied.
@@ -238,6 +263,10 @@ def _ego_speed_applied(code: str) -> bool:
     return True
 
 
+# Cross-checks the generated code's target-speed/braking logic against
+# what the inferred AEB variant requires (stationary for CCRs, moving for
+# CCRm, braking logic for CCRb), returning an error string if they
+# contradict, or None if consistent/not applicable.
 def _target_speed_handling_ok(code: str, variant: str) -> Optional[str]:
     """
     FIXED: More flexible validation of target speed handling.
@@ -282,6 +311,11 @@ def _target_speed_handling_ok(code: str, variant: str) -> Optional[str]:
     return None
 
 
+# Runs the full set of AEB-specific correctness checks on generated
+# Python code -- syntax validity, required ScenarioRunner methods, ego/
+# target spawn correctness, trigger-type consistency, ego speed
+# application, blocking-behavior-tree patterns, and variant-specific speed
+# handling -- returning the list of validation error strings (empty if valid).
 def validate_aeb_python(carla_py: str, scenario: Dict[str, Any]) -> List[str]:
     """
     FIXED: AEB validation with relaxed pattern matching.
@@ -399,6 +433,11 @@ def validate_aeb_python(carla_py: str, scenario: Dict[str, Any]) -> List[str]:
 # Main generator
 # -------------------------
 
+# Main entry point: retrieves supporting context from Chroma, builds the
+# prompt, and calls the LLM -- for AEB scenarios, validates the result and
+# retries (with error-augmented prompts) up to twice, accepting the code on
+# the final attempt if only soft warnings remain; non-AEB scenarios are
+# generated without this validation loop.
 def generate_python_rag(
     scenario: Dict[str, Any],
     *,
