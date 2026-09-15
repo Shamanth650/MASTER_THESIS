@@ -30,8 +30,7 @@ The pipeline runs end to end, with no manual scenario authoring required:
 8. **Launch** the generated `.xosc` directly in CARLA + ScenarioRunner from
    the UI, with live logs and status.
 
-Supported ADAS families: **AEB** (Car-to-Car), **LSS** (Lane Support
-Systems — ELK/LKA/LDW/BSM), and **VRU** (pedestrian, cyclist, motorcyclist).
+Supported ADAS families: **AEB** (Car-to-Car) and **VRU** (pedestrian, cyclist, motorcyclist).
 
 ---
 
