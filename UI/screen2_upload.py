@@ -2,11 +2,21 @@
 """
 SCREEN 2: PDF Upload
 User uploads the test protocol PDF document
+
+------------------------------------------------------------
+Responsible for: Letting the user upload a test protocol PDF, then running
+it through the PARSER pipeline (parser + LLM enrichment) and storing the
+resulting scenarios in session state before advancing to the info screen.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 import streamlit as st
 from ui_utils import navigate_to, show_progress, get_parser_function
 
+# Renders the PDF upload screen: a centered file uploader, then on "Next"
+# runs the full parsing pipeline against the uploaded bytes and reports
+# success/failure, showing a debug traceback expander on error.
 def show():
     """Display PDF upload screen"""
 
@@ -70,8 +80,8 @@ def show():
             st.session_state.pdf_name = uploaded_file.name
             
             # Show file info
-            st.success(f"✅ File uploaded: {uploaded_file.name}")
-            st.info(f"📄 Size: {len(st.session_state.pdf_bytes) / 1024:.1f} KB")
+            st.success(f"File uploaded: {uploaded_file.name}")
+            st.info(f"Size: {len(st.session_state.pdf_bytes) / 1024:.1f} KB")
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
@@ -86,7 +96,7 @@ def show():
         if st.button("Next →", use_container_width=True, disabled=not st.session_state.pdf_file):
             if st.session_state.pdf_file:
                 # Parse PDF
-                with st.spinner("🔄 Parsing PDF document... This may take 4-5 minutes."):
+                with st.spinner("Parsing PDF document... This may take 4-5 minutes."):
                     try:
                         # Get parser function
                         parser = get_parser_function()
@@ -103,15 +113,14 @@ def show():
                         
                         st.session_state.parsed_scenarios = result
                         
-                        st.success(f"✅ Successfully parsed {len(result)} scenarios!")
-                        st.balloons()
+                        st.success(f"Successfully parsed {len(result)} scenarios!")
                         navigate_to('info')
                         
                     except Exception as e:
-                        st.error(f"❌ Failed to parse PDF: {e}")
+                        st.error(f"Failed to parse PDF: {e}")
                         st.error("Please check the PDF format and try again.")
                         
                         # Show detailed error for debugging
-                        with st.expander("🔍 Debug Info"):
+                        with st.expander("Debug Info"):
                             import traceback
                             st.code(traceback.format_exc())
