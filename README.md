@@ -1,10 +1,10 @@
-# ADASynAI — ADAS Scenario Generator for CARLA
+# ADASynAI - ADAS Scenario Generator for CARLA
 
 **ADASynAI** turns a Euro NCAP protocol PDF into ready-to-run CARLA test
 scenarios. It reads the protocol, extracts every test scenario it defines,
 fills in the parameters an LLM can reliably infer, and generates both a
 CARLA Python script and an OpenSCENARIO (`.xosc`) file you can execute
-directly in ScenarioRunner — all from a single Streamlit UI.
+directly in ScenarioRunner - all from a single Streamlit UI.
 
 ---
 
@@ -12,19 +12,19 @@ directly in ScenarioRunner — all from a single Streamlit UI.
 
 The pipeline runs end to end, with no manual scenario authoring required:
 
-1. **Parse** the uploaded Euro NCAP PDF — extract raw text, tables, and diagrams.
+1. **Parse** the uploaded Euro NCAP PDF - extract raw text, tables, and diagrams.
 2. **Extract** every scenario anchor (code + name) for the AEB, LSS, and VRU families.
 3. **Structure** each anchor into a canonical scenario schema, paired with
    the supporting evidence (text + table/diagram images) needed to fill it in.
 4. **Enrich** the structured scenarios with an LLM, filling in only the
-   fields the protocol actually specifies — every filled value carries a
+   fields the protocol actually specifies - every filled value carries a
    citation back to the page and text it came from.
-5. **Report** on extraction accuracy — a PDF grading how well each
+5. **Report** on extraction accuracy - a PDF grading how well each
    scenario was captured, generated automatically alongside parsing.
 6. **Generate** artifacts on demand: a CARLA Python (ScenarioRunner) script
    and/or an OpenSCENARIO `.xosc` file, via a RAG pipeline over a Chroma
    knowledge base of templates and rules.
-7. **Review & override** — before generation, adjust any protocol field the
+7. **Review & override** - before generation, adjust any protocol field the
    pipeline verified as safely editable (speeds, overlap, headway, actor
    model), with everything else shown read-only for transparency.
 8. **Launch** the generated `.xosc` directly in CARLA + ScenarioRunner from
@@ -38,10 +38,10 @@ Supported ADAS families: **AEB** (Car-to-Car) and **VRU** (pedestrian, cyclist, 
 
 ```mermaid
 flowchart TD
-    PDF["Euro NCAP Protocol PDF"] --> P1["PARSER — Stage 1<br/>parser_1.py + pdf_to_json_raw.py<br/>text, tables, diagrams -> knowledge_base_raw.json"]
-    P1 --> P2["PARSER — Stage 2<br/>scenario_anchor_extractor.py<br/>stage2_build_structured_and_evidence.py<br/>anchors -> structured_scenarios.json + scenario_evidence.json"]
-    P2 --> P3["PARSER — Stage <br/>llm_enricher.py + llm_image_picker.py<br/>fills protocol fields, evidence-cited"]
-    P3 --> P4["PARSER — Stage 4<br/>report_generator.py<br/>accuracy report (PDF)"]
+    PDF["Euro NCAP Protocol PDF"] --> P1["PARSER - Stage 1<br/>parser_1.py + pdf_to_json_raw.py<br/>text, tables, diagrams -> knowledge_base_raw.json"]
+    P1 --> P2["PARSER - Stage 2<br/>scenario_anchor_extractor.py<br/>stage2_build_structured_and_evidence.py<br/>anchors -> structured_scenarios.json + scenario_evidence.json"]
+    P2 --> P3["PARSER - Stage <br/>llm_enricher.py + llm_image_picker.py<br/>fills protocol fields, evidence-cited"]
+    P3 --> P4["PARSER - Stage 4<br/>report_generator.py<br/>accuracy report (PDF)"]
     P3 --> UNI["uniform_scenarios.json"]
 
     UNI --> UI["UI (Streamlit)<br/>standards -> upload -> info -> features -> parameter review"]
@@ -61,7 +61,7 @@ flowchart TD
 The pipeline is **evidence-first and null-tolerant** throughout: a field is
 only filled if the protocol states it, every filled value is tagged with
 the page and text it came from, and nothing in the pipeline hard-fails
-just because a field is legitimately absent — it's surfaced as a warning
+just because a field is legitimately absent - it's surfaced as a warning
 for the generator or the engineer to handle instead.
 
 ---
@@ -125,7 +125,7 @@ clean_euro/
 - **Linux** (the CARLA launcher screen assumes a Linux shell environment)
 - **Python 3.10+**
 - **CARLA 0.9.15** installed at `~/CARLA_0.9.15` (only needed for the
-  in-app launcher — generation works without it)
+  in-app launcher - generation works without it)
 - **ScenarioRunner 0.9.16**, cloned as a sibling/known path (see below)
 - An API key for at least one LLM provider:
   - `OPENAI_API_KEY` (used for embeddings, and generation if `provider="openai"`)
@@ -175,7 +175,7 @@ Create a `.env` file at the project root:
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Optional overrides — sensible defaults are used if omitted
+# Optional overrides - sensible defaults are used if omitted
 OPENAI_MODEL=gpt-4o
 OPENAI_EMBED_MODEL=text-embedding-3-small
 CLAUDE_MODEL=claude-sonnet-4-6
@@ -198,4 +198,4 @@ through: **Standard → Upload → Info → Features → Parameter Review → Ge
 
 ## Maintainer
 
-Shamanth Bandimata Adiga — `shamanth.adiga@ltts.com`
+Shamanth Bandimata Adiga - `shamanth.adiga@ltts.com`
