@@ -9,6 +9,15 @@ UPDATED (Stage-2 Evidence Pack integration):
 
 This module is provider-agnostic at the interface level: `enrich_one_scenario`
 and `enrich_all` return plain Python dicts/lists.
+
+------------------------------------------------------------
+Responsible for: Stage-3 enrichment -- taking each ADAS scenario skeleton
+from Stage 2 and calling Claude (with supporting evidence text/images) to
+fill in missing protocol fields under strict null-only, evidence-required,
+identity-locked rules, then validating/repairing the LLM output and running
+deterministic LSS/VRU-specific fallback fills before returning the result.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 from __future__ import annotations
 
@@ -61,6 +70,8 @@ REPAIR_MAX_TRIES = int(os.getenv("LLM_ENRICH_REPAIR_MAX_TRIES", "2") or "2")
 _SCENARIO_FAMILIES = ("CCR", "CCF", "CCB", "C2C", "C2P", "C2B", "VRU", "LSS", "ELK", "LKA", "LDW", "BSM")
 
 
+# Builds a set of alternate names (family prefix, CCFho grouping, etc.) for
+# a scenario code, used to widen fallback keyword matching against KB pages.
 def _build_code_aliases(code: str) -> List[str]:
     code = (code or "").strip()
     if not code:
@@ -90,10 +101,14 @@ def _build_code_aliases(code: str) -> List[str]:
 # ----------------------------
 # Utilities: JSON path + diff
 # ----------------------------
+# Returns True if a value is a JSON scalar (None, str, int, float, bool)
+# rather than a dict or list, used by the path-walking helpers below.
 def _is_scalar(x: Any) -> bool:
     return x is None or isinstance(x, (str, int, float, bool))
 
 
+# Recursively walks a JSON-like object, yielding (dot/bracket path, scalar
+# value) pairs for every leaf, used to diff two scenario dicts field by field.
 def _iter_paths(obj: Any, prefix: str = "") -> Iterable[Tuple[str, Any]]:
     if _is_scalar(obj):
         yield (prefix or "$", obj)
@@ -111,6 +126,8 @@ def _iter_paths(obj: Any, prefix: str = "") -> Iterable[Tuple[str, Any]]:
     yield (prefix or "$", obj)
 
 
+# Resolves a dotted/bracketed path string (e.g. "scenario_details.extra[0]")
+# against a nested dict/list structure, returning the value found or None.
 def _get_path(obj: Any, path: str) -> Any:
     cur = obj
     if path in ("$", ""):
@@ -137,6 +154,8 @@ def _get_path(obj: Any, path: str) -> Any:
     return cur
 
 
+# Compares two JSON-like objects leaf by leaf and returns the sorted list
+# of paths whose scalar value differs between them.
 def _diff_scalar_leaves(a: Dict[str, Any], b: Dict[str, Any]) -> List[str]:
     a_map = dict(_iter_paths(a))
     b_map = dict(_iter_paths(b))
@@ -151,6 +170,8 @@ def _diff_scalar_leaves(a: Dict[str, Any], b: Dict[str, Any]) -> List[str]:
 # ----------------------------
 # Stage-2 evidence pack loading
 # ----------------------------
+# Loads and validates the scenario_evidence.json file, raising if its
+# top-level shape isn't a JSON object.
 def load_scenario_evidence(evidence_path: str) -> Dict[str, Any]:
     with open(evidence_path, "r", encoding="utf-8") as f:
         obj = json.load(f)
@@ -159,6 +180,9 @@ def load_scenario_evidence(evidence_path: str) -> Dict[str, Any]:
     return obj
 
 
+# Looks up a scenario's supporting doc_text in the evidence object, trying
+# lookup by scenario code, then by name, then scanning all records for a
+# matching scenario_code field, returning None if nothing is found.
 def get_doc_text_from_evidence(
     evidence_obj: Dict[str, Any],
     scenario_code: str,
@@ -198,6 +222,8 @@ def get_doc_text_from_evidence(
                     return dt.strip()
 
     
+# Looks up a scenario's image_candidates dict in the evidence object using
+# the same code/name/scan strategy as get_doc_text_from_evidence.
 def get_image_candidates_from_evidence(
     evidence_obj: Dict[str, Any],
     scenario_code: str,
@@ -216,6 +242,7 @@ def get_image_candidates_from_evidence(
     code = (scenario_code or "").strip()
     name = (scenario_name or "").strip()
 
+    # Pulls the "image_candidates" dict out of one evidence record, if present.
     def _extract(rec: Any) -> Optional[Dict[str, Any]]:
         if not isinstance(rec, dict):
             return None
@@ -255,6 +282,8 @@ MAX_PAGE_IMAGES = int(os.getenv("LLM_ENRICH_MAX_PAGE_IMAGES", "0") or "0")
 # Where Parsed_Data lives (used to resolve relative paths from Stage 2)
 PARSED_ROOT = os.getenv("PARSED_ROOT", None)
 
+# Tries several likely locations (env var, CWD, script dir, parent dir) to
+# locate the Parsed_Data folder without hardcoding an absolute path.
 def _guess_parsed_root() -> Optional[str]:
     """Try to locate Parsed_Data folder without hardcoding."""
     # 1) explicit env
@@ -280,6 +309,9 @@ def _guess_parsed_root() -> Optional[str]:
     return None
 
 
+# Resolves a Stage-2-recorded image path (which may be absolute, relative,
+# use backslashes, or include a redundant Parsed_Data prefix) to a real
+# existing file, falling back to a recursive filename search as a last resort.
 def _resolve_image_path(rel_path: str) -> Optional[str]:
     """
     Stage 2 stores paths like:
@@ -314,6 +346,7 @@ def _resolve_image_path(rel_path: str) -> Optional[str]:
     if not root:
         return None
 
+    # Joins a relative path against a root directory and returns it only if the file actually exists there.
     # Helper: join against root and check
     def _try_join(r: str, rel: str) -> Optional[str]:
         cand = os.path.normpath(os.path.join(r, rel))
@@ -356,6 +389,8 @@ def _resolve_image_path(rel_path: str) -> Optional[str]:
 
 
 
+# Selects and resolves up to the configured number of table/diagram/page
+# images from an image_candidates dict, de-duplicating the resulting absolute paths.
 def _pick_image_paths(image_candidates: Optional[Dict[str, Any]]) -> List[str]:
     if not image_candidates:
         return []
@@ -388,6 +423,8 @@ def _pick_image_paths(image_candidates: Optional[Dict[str, Any]]) -> List[str]:
     return out
 
 
+# Reads a local image file and encodes it as a base64 data: URL, guessing
+# the MIME type from the file extension (defaulting to PNG).
 def _file_to_data_url(path: str) -> str:
     """Encode local image to a data URL for multimodal input."""
     mime, _ = mimetypes.guess_type(path)
@@ -397,6 +434,8 @@ def _file_to_data_url(path: str) -> str:
         b64 = base64.b64encode(f.read()).decode("ascii")
     return f"data:{mime};base64,{b64}"
 
+# Reads a local image file and returns its (MIME type, base64 data) pair
+# in the shape the Anthropic vision API expects.
 def _file_to_base64_image(path: str) -> Tuple[str, str]:
     """
     Read an image file and return (media_type, base64_data) for Anthropic vision.
@@ -414,15 +453,21 @@ def _file_to_base64_image(path: str) -> Tuple[str, str]:
 # ----------------------------
 # Knowledge base loading + filtering (fallback only)
 # ----------------------------
+# Simple container pairing one page number (or None) with its extracted
+# text, used by the fallback (non-evidence-pack) KB filtering path.
 @dataclass
 class KBPage:
     page: Optional[int]
     text: str
 
 
+# Converts the raw knowledge-base JSON (which may be a list, dict, or bare
+# string, in several legacy shapes) into a flat list of KBPage entries,
+# skipping any image-metadata items.
 def _normalize_kb_items(kb_obj: Any) -> List[KBPage]:
     pages: List[KBPage] = []
 
+    # Pulls the text content out of one KB item, checking known text keys and skipping image entries.
     def extract_text(it: Any) -> Optional[str]:
         if isinstance(it, dict):
             # NEW: KB may contain image metadata entries; never treat them as text
@@ -436,6 +481,7 @@ def _normalize_kb_items(kb_obj: Any) -> List[KBPage]:
             return it
         return None
 
+    # Pulls the page number out of one KB item, checking several possible key names.
     def extract_page(it: Any) -> Optional[int]:
         if isinstance(it, dict):
             for k in ("page", "page_no", "pageno", "page_number"):
@@ -475,6 +521,9 @@ def _normalize_kb_items(kb_obj: Any) -> List[KBPage]:
     return pages
 
 
+# Loads the fallback knowledge_base.json file and normalizes it into
+# KBPage entries, additionally splitting a single blob containing inline
+# "[PAGE N]" markers into separate per-page entries when needed.
 def load_kb_pages(knowledge_base_path: str) -> List[KBPage]:
     with open(knowledge_base_path, "r", encoding="utf-8") as f:
         kb_obj = json.load(f)
@@ -499,6 +548,9 @@ def load_kb_pages(knowledge_base_path: str) -> List[KBPage]:
     return pages
 
 
+# Scores a single KB page's text for relevance to a scenario code/name
+# using alias matches, name-token matches, parameter keywords, and numeric
+# density, for the fallback (non-evidence-pack) retrieval path.
 def _score_page(text: str, code: str, name: str) -> int:
     score = 0
     t = (text or "").lower()
@@ -532,6 +584,9 @@ def _score_page(text: str, code: str, name: str) -> int:
     return score
 
 
+# Fallback retrieval: scores every KB page against a scenario's code/name,
+# picks the top-scoring pages (plus neighboring pages for context), and
+# assembles them into one truncated document string for the LLM prompt.
 def filter_kb_for_scenario(
     kb_pages: List[KBPage],
     scenario_code: str,
@@ -775,6 +830,9 @@ Final checklist (must all pass):
 """
 
 
+# Robustly pulls the first complete JSON object out of the LLM's raw text
+# reply, stripping markdown fences and using raw_decode so trailing junk
+# after the JSON doesn't crash the parse; falls back to a brace-span regex if needed.
 def _extract_first_json_object(text: str) -> Dict[str, Any]:
     """
     Claude returns plain text. We must extract the first JSON object robustly.
@@ -819,6 +877,8 @@ def _extract_first_json_object(text: str) -> Dict[str, Any]:
     return json.loads(m.group(0))
 
 
+# Sends a JSON payload (plus optional images) to the Claude Messages API
+# with the given system prompt, and parses the assistant's text reply back into a JSON dict.
 def call_llm_json(
     system_prompt: str,
     user_payload: Dict[str, Any],
@@ -887,6 +947,8 @@ IDENTITY_LOCK_PATHS = [
 ]
 
 
+# Guarantees scenario_details.extra.evidence exists and is a list of
+# well-formed {field, page, match} dicts, dropping any malformed entries.
 def _ensure_extra_evidence_shape(out: Dict[str, Any]) -> None:
     sd = out.setdefault("scenario_details", {})
     extra = sd.setdefault("extra", {})
@@ -912,6 +974,9 @@ def _ensure_extra_evidence_shape(out: Dict[str, Any]) -> None:
     extra["evidence"] = cleaned
 
 
+# Finds which scenario_details/scenario_code paths changed between input
+# and output that are NOT under extra/notes, since only those require an
+# accompanying evidence entry.
 def _changed_paths_requiring_evidence(inp: Dict[str, Any], out: Dict[str, Any]) -> List[str]:
     changed = _diff_scalar_leaves(inp, out)
     need: List[str] = []
@@ -927,6 +992,10 @@ def _changed_paths_requiring_evidence(inp: Dict[str, Any], out: Dict[str, Any]) 
     return sorted(set(need))
 
 
+# Checks an LLM enrichment output against the input: identity-locked
+# fields must be unchanged, user_config must be untouched, and every
+# changed protocol field must have a matching evidence entry; returns the
+# list of validation error strings (empty if valid).
 def validate_enrichment(inp: Dict[str, Any], out: Dict[str, Any]) -> List[str]:
     errors: List[str] = []
     if not isinstance(out, dict):
@@ -955,6 +1024,8 @@ def validate_enrichment(inp: Dict[str, Any], out: Dict[str, Any]) -> List[str]:
     return errors
 
 
+# Asks the LLM to fix a previously invalid enrichment output, passing back
+# the original input, the bad output, and the specific validation errors to correct.
 def repair_with_llm(
     inp: Dict[str, Any],
     bad_out: Dict[str, Any],
@@ -980,6 +1051,8 @@ def repair_with_llm(
 # ----------------------------
 # Post-processing (deterministic)
 # ----------------------------
+# Detects whether a scenario dict belongs to the LSS family, checking its
+# adas_family tag, an "lss" extra block, its code prefix, or LSS keywords in its name.
 def _is_lss_like(s: Dict[str, Any]) -> bool:
     sd = s.get("scenario_details") or {}
     extra = sd.get("extra") or {}
@@ -997,6 +1070,8 @@ def _is_lss_like(s: Dict[str, Any]) -> bool:
     return False
 
 
+# Appends one {field, page, match} evidence record to a scenario's
+# scenario_details.extra.evidence list, creating the list if it doesn't exist yet.
 def _append_evidence(s: Dict[str, Any], field: str, match: str, page: Optional[int] = None) -> None:
     sd = s.setdefault("scenario_details", {})
     extra = sd.setdefault("extra", {})
@@ -1007,6 +1082,10 @@ def _append_evidence(s: Dict[str, Any], field: str, match: str, page: Optional[i
     ev.append({"field": field, "page": page if isinstance(page, int) else None, "match": (match or "")[:300]})
 
 
+# Original LSS container-flag normalizer: if the LLM flagged an anchor as
+# a container, this overrides that flag back to a real scenario when the
+# name matches known LSS sub-scenario hints, otherwise confirms it as a
+# non-runnable container. (Later overridden by an append-only patch below.)
 def normalize_lss_containers(s: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize LSS container flags.
 
@@ -1104,6 +1183,9 @@ _CANON_MAP = [
     ("BSM - Blind Spot Monitoring", ("BSM", "BLIND", "SPOT")),
 ]
 
+# Deterministic (non-LLM) fallback that fills in an LSS scenario's
+# canonical label, boundary type, departure side, and speed step sizes by
+# pattern-matching the doc text, only when the LLM left those fields empty.
 def _fallback_fill_lss_fields_from_text(s: Dict[str, Any], doc_text: str) -> Dict[str, Any]:
     """Deterministic extraction of common LSS fields (boundary/side/step/canonical) when LLM output is sparse."""
     if not isinstance(s, dict) or not _is_lss_like(s):
@@ -1185,6 +1267,9 @@ def _fallback_fill_lss_fields_from_text(s: Dict[str, Any], doc_text: str) -> Dic
 
     return s
 
+# Conservative deterministic fallback that fills LSS ego-speed and
+# lateral-speed ranges only when a clear "N-M unit" range pattern is found
+# and none of those fields are already filled; never invents values.
 def _fallback_fill_lss_ranges_from_text(s: Dict[str, Any], doc_text: str) -> Dict[str, Any]:
     """
     Safe fallback for LSS numeric ranges.
@@ -1242,6 +1327,11 @@ def _fallback_fill_lss_ranges_from_text(s: Dict[str, Any], doc_text: str) -> Dic
 # ----------------------------
 # Public API
 # ----------------------------
+# Original single-scenario enrichment routine: gathers doc text/images
+# (preferring the Stage-2 evidence pack, falling back to KB filtering),
+# calls the LLM under SYSTEM_PROMPT, validates and repairs the result up to
+# REPAIR_MAX_TRIES times, and runs LSS deterministic post-processing.
+# (Later overridden by an append-only patch below that adds VRU support.)
 def enrich_one_scenario(
     scenario: Dict[str, Any],
     knowledge_base_path: str = "knowledge_base.json",
@@ -1332,6 +1422,8 @@ def enrich_one_scenario(
     return out
 
 
+# Runs enrich_one_scenario over every ADAS-typed scenario in the list
+# (leaving NON_ADAS entries untouched), loading the evidence pack once and reusing it for all.
 def enrich_all(
     scenarios: List[Dict[str, Any]],
     knowledge_base_path: str = "knowledge_base.json",
@@ -1380,6 +1472,8 @@ _LSS_CONTAINER_HINTS = (
     "figure", "table", "scenarios:", "scenario paths", "is considered", "means",
 )
 
+# Checks if a title reads like a figure/table caption or section header
+# (a container, not a real scenario) based on known hint phrases or a trailing colon.
 def _looks_like_lss_container_title(title: str) -> bool:
     t = (title or "").strip().lower()
     if not t:
@@ -1391,12 +1485,17 @@ def _looks_like_lss_container_title(title: str) -> bool:
         return True
     return False
 
+# Checks if a title reads like an actual procedural test description
+# (e.g. "perform the test...") rather than a heading, using known procedural hint phrases.
 def _looks_like_lss_procedural_test(title: str) -> bool:
     t = (title or "").strip().lower()
     if not t:
         return False
     return any(h in t for h in _LSS_PROCEDURAL_HINTS)
 
+# OVERRIDE of the earlier normalize_lss_containers: adds an extra check so
+# that a title reading like a real procedural test is never demoted to a
+# non-runnable container just because the LLM flagged is_container=true.
 def normalize_lss_containers(s: Dict[str, Any]) -> Dict[str, Any]:
     """
     OVERRIDE of earlier normalize_lss_containers (append-only patch).
@@ -1460,6 +1559,8 @@ def normalize_lss_containers(s: Dict[str, Any]) -> Dict[str, Any]:
 # Extend scenario families for aliasing / fallback retrieval
 _SCENARIO_FAMILIES_V2 = ("CCR", "CCF", "CCB", "C2C", "C2P", "C2B", "VRU", "CP", "CB", "CM", "LSS", "ELK", "LKA", "LDW", "BSM")
 
+# OVERRIDE of the earlier _build_code_aliases: adds CP/CB/CM -> VRU aliasing
+# on top of the original family-prefix and CCFho aliasing logic.
 def _build_code_aliases(code: str) -> List[str]:  # type: ignore[override]
     """
     OVERRIDE (append-only): family-aware aliases used by fallback retrieval.
@@ -1495,6 +1596,8 @@ def _build_code_aliases(code: str) -> List[str]:  # type: ignore[override]
     return sorted({a for a in aliases if a})
 
 
+# Detects whether a scenario dict belongs to the VRU family, checking its
+# adas_family tag, a "vru" extra block, its code prefix, or VRU keywords in its name.
 def _is_vru_like(s: Dict[str, Any]) -> bool:
     sd = s.get("scenario_details") or {}
     extra = sd.get("extra") or {}
@@ -1522,6 +1625,9 @@ _VRU_SIDE_RX = re.compile(r"\b(nearside|farside|left|right)\b", re.IGNORECASE)
 _VRU_LATERAL_MARKERS = {"NA", "FA", "NAO", "FAO", "NCO", "FCO"}
 
 
+# Strips the 2-letter family prefix (CP/CB/CM) and any trailing -NN overlap
+# suffix from a VRU code to get its positional "marker" (e.g. NA, FA, DA),
+# avoiding false substring matches like "NCO" inside "CMONCOMING".
 def _vru_code_core_marker(code_u: str) -> str:
     """
     Extract the marker portion of a VRU code, stripping the 2-letter family
@@ -1550,6 +1656,8 @@ _VRU_SPEED_KPH_SINGLE_RX = re.compile(
 )
 
 
+# Ensures a scenario's scenario_details.extra.vru sub-dict exists with all
+# expected VRU fields present (defaulting to None), and tags its adas_family as VRU.
 def _ensure_vru_shape(s: Dict[str, Any]) -> Dict[str, Any]:
     sd = s.setdefault("scenario_details", {})
     extra = sd.setdefault("extra", {})
@@ -1569,6 +1677,10 @@ def _ensure_vru_shape(s: Dict[str, Any]) -> Dict[str, Any]:
     return s
 
 
+# Deterministic (non-LLM) fallback that fills VRU-specific fields (type,
+# variant, adult/child, obscured, crossing side, speed) by pattern-matching
+# the scenario code and doc text, gated carefully per field so values aren't
+# picked up from a neighboring scenario's text on the same page.
 def _fallback_fill_vru_fields_from_text(s: Dict[str, Any], doc_text: str) -> Dict[str, Any]:
     """
     Deterministic VRU fill:
@@ -1738,6 +1850,10 @@ SYSTEM_PROMPT_V2 = SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_VRU_APPEND
 
 
 # --- Override enrich_one_scenario to use SYSTEM_PROMPT_V2 and add VRU deterministic fallback ---
+# OVERRIDE of the earlier enrich_one_scenario: identical evidence-gathering,
+# LLM call, and validation/repair flow, but uses SYSTEM_PROMPT_V2 (which adds
+# VRU-mode rules) and additionally runs the VRU deterministic fallback fill
+# alongside the existing LSS post-processing.
 _enrich_one_scenario_base = enrich_one_scenario  # keep reference, just in case
 
 def enrich_one_scenario(  # type: ignore[override]
@@ -1839,6 +1955,9 @@ def enrich_one_scenario(  # type: ignore[override]
 
 
 # enrich_all remains compatible; it calls enrich_one_scenario symbol, which is now overridden above.
+# CLI entry point: reads structured_scenarios.json (plus evidence/KB paths
+# from env vars), runs enrich_all over every scenario, and writes the
+# enriched result to uniform_scenarios.json.
 def main():
     # Default file names (same folder you run from)
     structured_path = os.getenv("STRUCTURED_SCENARIOS_PATH", "structured_scenarios.json")
