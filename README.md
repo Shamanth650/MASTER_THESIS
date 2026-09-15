@@ -41,7 +41,7 @@ Systems — ELK/LKA/LDW/BSM), and **VRU** (pedestrian, cyclist, motorcyclist).
 flowchart TD
     PDF["Euro NCAP Protocol PDF"] --> P1["PARSER — Stage 1<br/>parser_1.py + pdf_to_json_raw.py<br/>text, tables, diagrams -> knowledge_base_raw.json"]
     P1 --> P2["PARSER — Stage 2<br/>scenario_anchor_extractor.py<br/>stage2_build_structured_and_evidence.py<br/>anchors -> structured_scenarios.json + scenario_evidence.json"]
-    P2 --> P3["PARSER — Stage 3 (optional)<br/>llm_enricher.py + llm_image_picker.py<br/>fills protocol fields, evidence-cited"]
+    P2 --> P3["PARSER — Stage <br/>llm_enricher.py + llm_image_picker.py<br/>fills protocol fields, evidence-cited"]
     P3 --> P4["PARSER — Stage 4<br/>report_generator.py<br/>accuracy report (PDF)"]
     P3 --> UNI["uniform_scenarios.json"]
 
@@ -53,7 +53,7 @@ flowchart TD
 
     PY --> CHROMA[("Chroma vector DB<br/>knowledge_base/ templates + rules")]
     XOSC --> CHROMA
-    PY --> LLM["llm_client.py<br/>OpenAI or Claude"]
+    PY --> LLM["llm_client.py<br/> Claude"]
     XOSC --> LLM
 
     XOSC --> LAUNCH["screen6_carla_launcher.py<br/>launches CARLA + ScenarioRunner"]
