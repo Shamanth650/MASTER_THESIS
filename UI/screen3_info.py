@@ -2,11 +2,22 @@
 """
 SCREEN 3: Standard Information
 Shows brief info about the standard and PDF preview
+
+------------------------------------------------------------
+Responsible for: Summarizing the parsed document (standard, filename,
+scenario count, detected scenario list) next to a first-page PDF preview,
+before letting the user continue to the features/selection screen.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 import streamlit as st
 from ui_utils import navigate_to, show_progress, get_scenario_name
 
+# Renders the standard-information screen: a left column summarizing the
+# parsed document and detected scenarios, a right column with a rendered
+# first-page PDF preview (falling back gracefully if pdf2image is missing),
+# and navigation buttons.
 def show():
     """Display PDF upload screen"""
 
@@ -94,11 +105,11 @@ def show():
                     st.warning("Could not render PDF preview")
                     
         except ImportError:
-            st.warning("⚠️ PDF preview not available. Install pdf2image: `pip install pdf2image`")
-            st.info("💡 You can still proceed without preview")
+            st.warning("PDF preview not available. Install pdf2image: `pip install pdf2image`")
+            st.info("You can still proceed without preview")
         except Exception as e:
             st.error(f"Error rendering PDF: {e}")
-            st.info("💡 You can still proceed")
+            st.info("You can still proceed")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
