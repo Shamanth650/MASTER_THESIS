@@ -6,6 +6,15 @@ FIXED VERSION v4:
 - Added VRU variant patterns to _AEB_VARIANT_PATTERNS
 - All other fixes from v3 preserved
 - Validated: CARLA 0.9.15 / ScenarioRunner 0.9.16 / Town01
+
+------------------------------------------------------------
+Responsible for: Generating (and, for AEB/VRU, validating, deterministically
+patching, and retrying) the OpenSCENARIO (.xosc) file for a scenario --
+retrieving supporting context, prompting the LLM, injecting verified
+Town01 spawn positions, and running strict structural/semantic checks
+before accepting the output.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
@@ -194,6 +203,10 @@ _FRONT_SCENARIOS = {
 }
 
 
+# Infers the AEB/VRU scenario variant by checking, in order: runtime_hints,
+# user_config.behavior.scenario_variant, classification.variant,
+# scenario_code (stripping any overlap-percent suffix), then a regex match
+# against the scenario name; returns "unknown" if nothing matches.
 def _infer_aeb_variant_key(scenario: Dict[str, Any]) -> str:
     hints = scenario.get("runtime_hints") or {}
     if isinstance(hints, dict):
@@ -222,6 +235,7 @@ def _infer_aeb_variant_key(scenario: Dict[str, Any]) -> str:
     return "unknown"
 
 
+# Reads and normalizes the scenario's trigger type to an uppercase string.
 def _normalize_trigger_type(scenario: Dict[str, Any]) -> str:
     t = _get_path(scenario, "user_config.trigger.type", "")
     if not isinstance(t, str):
@@ -229,11 +243,15 @@ def _normalize_trigger_type(scenario: Dict[str, Any]) -> str:
     return t.strip().upper()
 
 
+# Deterministically forces any $heroSpeed/$adversarySpeed placeholder
+# found inside the <Init> block to 0.0, leaving Story ManeuverGroup speeds untouched.
 def _fix_init_speed(xosc_xml: str) -> str:
     """
     Force replace $heroSpeed/$adversarySpeed ONLY inside <Init>...</Init> block.
     Story ManeuverGroup speeds are left untouched.
     """
+    # Replaces both the hero and adversary speed placeholders with 0.0
+    # within a single matched <Init>...</Init> block.
     def fix_init_block(match):
         block = match.group(0)
         block = re.sub(
@@ -250,11 +268,14 @@ def _fix_init_speed(xosc_xml: str) -> str:
     return re.sub(r'<Init>.*?</Init>', fix_init_block, xosc_xml, flags=re.DOTALL)
 
 
+# Deterministically corrects the hero entity's Property type from
+# "simulation" to "ego_vehicle" (a common LLM mistake), touching only the hero's ScenarioObject block.
 def _fix_hero_type(xosc_xml: str) -> str:
     """
     Fix hero entity Property type from 'simulation' to 'ego_vehicle'.
     Only applies to the hero ScenarioObject block — does not touch adversary/pedestrian.
     """
+    # Replaces the "simulation" type value with "ego_vehicle" within one matched hero ScenarioObject block.
     def fix_hero_block(match):
         block = match.group(0)
         block = block.replace(
@@ -271,6 +292,9 @@ def _fix_hero_type(xosc_xml: str) -> str:
     )
 
 
+# Appends the previous attempt's validation errors plus an exhaustive list
+# of mandatory XOSC structural rules (spawn positions, speed placeholders,
+# trigger distances, StopTrigger, etc.) to the prompt for a stronger retry.
 def _augment_user_prompt_with_errors(user_prompt: str, errors: List[str]) -> str:
     err_blob = "\n".join([f"- {e}" for e in errors])
     return (
@@ -311,6 +335,7 @@ def _augment_user_prompt_with_errors(user_prompt: str, errors: List[str]) -> str
     )
 
 
+# Coerces a value to a float, returning `default` if the value is None or not convertible.
 def _safe_float(v: Any, default: float) -> float:
     try:
         if v is None:
@@ -320,19 +345,28 @@ def _safe_float(v: Any, default: float) -> float:
         return float(default)
 
 
+# Parses an XML string into an ElementTree, configured to preserve
+# comment nodes (needed to detect the GENERATED_BY marker comment).
 def _et_parse_keep_comments(xml_text: str) -> ET.Element:
     parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
     return ET.fromstring(xml_text, parser=parser)
 
 
+# Thin wrapper around ElementTree.find for a single element lookup by path.
 def _find_first(root: ET.Element, path: str) -> Optional[ET.Element]:
     return root.find(path)
 
 
+# Checks whether an element's tag ends with the given suffix (used since
+# ElementTree tags may carry an XML namespace prefix).
 def _tag_endswith(elem: ET.Element, suffix: str) -> bool:
     return elem.tag.endswith(suffix)
 
 
+# Ensures the given entity has a <Private><PrivateAction><TeleportAction>
+# with a verified Town01 LanePosition inside the Init/Actions block,
+# creating the <Private> wrapper if it doesn't already exist and doing
+# nothing if a teleport is already present.
 def _ensure_private_with_teleport(
     actions_elem: ET.Element,
     entity_ref: str,
@@ -377,6 +411,10 @@ def _ensure_private_with_teleport(
     )
 
 
+# Deterministic post-processing pass over LLM-generated XOSC: removes any
+# invalid floating <PrivateAction> elements, injects verified
+# teleport/lane-position blocks for hero/adversary/pedestrian as needed,
+# and re-applies the init-speed and hero-type fixes.
 def _sanitize_init_actions_and_patch_teleports(xosc_xml: str, scenario: Dict[str, Any]) -> str:
     """
     Deterministic post-processor:
@@ -442,6 +480,8 @@ def _sanitize_init_actions_and_patch_teleports(xosc_xml: str, scenario: Dict[str
     return out
 
 
+# Checks whether any of the given entity names has a complete Init-block
+# teleport (a <Private> containing both a TeleportAction and a recognized position type).
 def _has_init_teleport_for(xml: str, entity_names: List[str]) -> bool:
     for entity_name in entity_names:
         patterns = [
@@ -464,6 +504,12 @@ def _has_init_teleport_for(xml: str, entity_names: List[str]) -> bool:
     return False
 
 
+# Runs the full set of AEB/VRU-specific structural checks on generated
+# XOSC XML -- parseability, required elements (Storyboard/Entities/ego/
+# target), correct position types, init-speed placeholders, teleport
+# completeness, trigger-type consistency, StopTrigger presence, the
+# CCFhol-specific FollowTrajectoryAction requirements, and structural
+# validity of Init/Actions -- returning the list of validation errors (empty if valid).
 def validate_aeb_xosc(xosc_xml: str, scenario: Dict[str, Any]) -> List[str]:
     errors: List[str] = []
     if not isinstance(xosc_xml, str) or not xosc_xml.strip():
@@ -579,6 +625,12 @@ def validate_aeb_xosc(xosc_xml: str, scenario: Dict[str, Any]) -> List[str]:
     return errors
 
 
+# Main entry point: retrieves supporting context, builds the XOSC prompt
+# (injecting the special CCFhol FollowTrajectoryAction rules when
+# applicable), and calls the LLM -- for AEB/VRU scenarios, deterministically
+# patches and validates the result and retries up to twice before accepting
+# it on soft-warning-only failures; for other families, generates one-shot
+# and falls back to the deterministic xosc_builder if enabled and the LLM output is invalid.
 def generate_xosc_rag(
     scenario: Dict[str, Any],
     *,
