@@ -1,3 +1,13 @@
+# ============================================================
+# Script: parser_1.py
+# Responsible for: Stage-1 PDF parsing. Given a single PDF file, this
+# script extracts its raw text (page by page), extracts embedded raster
+# images (diagrams/icons/figures), and best-effort extracts table
+# regions as cropped images (via Camelot bounding boxes + PyMuPDF
+# cropping). All outputs are written under Parsed_Data/.
+# Maintainer: shamanth.adiga@ltts.com
+# ============================================================
+
 import os
 import sys
 import re
@@ -30,6 +40,8 @@ DIAGRAM_IMAGE_OUTPUT = os.path.join(IMAGE_ROOT, "diagram_image")
 # HELPERS
 # ============================================================
 
+# Deletes and recreates each output directory passed in, so every run
+# starts from a clean, empty folder instead of mixing with old outputs.
 def prepare_output_dirs(dirs: List[str]) -> None:
     """
     Clears and recreates output dirs (only those passed).
@@ -41,6 +53,8 @@ def prepare_output_dirs(dirs: List[str]) -> None:
         os.makedirs(folder, exist_ok=True)
 
 
+# Walks every page of the opened PDF document, concatenates the plain
+# text with page-break markers, and writes it to a single .txt file.
 def extract_text_from_pdf(doc: fitz.Document, pdf_id: str) -> None:
     all_text = ""
     for page in doc:
@@ -54,6 +68,8 @@ def extract_text_from_pdf(doc: fitz.Document, pdf_id: str) -> None:
         f.write(all_text)
 
 
+# Pulls every embedded raster image out of the PDF page by page and
+# saves each one under the diagram_image output folder.
 def extract_embedded_images(doc: fitz.Document, pdf_id: str) -> List[Tuple[str, str]]:
     """
     Extract embedded raster images from the PDF.
@@ -80,6 +96,8 @@ def extract_embedded_images(doc: fitz.Document, pdf_id: str) -> List[Tuple[str, 
     return image_infos
 
 
+# Coerces a Camelot page-number value (which may be a string or contain
+# extra characters) into a plain int, or returns None if it can't be parsed.
 def _safe_int_page(value) -> Optional[int]:
     if value is None:
         return None
@@ -90,6 +108,9 @@ def _safe_int_page(value) -> Optional[int]:
         return int(m.group()) if m else None
 
 
+# Uses Camelot to locate table bounding boxes in the PDF (lattice
+# flavor), then crops each detected table region with PyMuPDF and
+# saves it as a PNG image; failures are logged and skipped, not raised.
 def extract_tables_from_pdf(pdf_path: str, pdf_id: str) -> None:
     """
     Extract tables as IMAGES (no table JSON, no OCR).
@@ -149,6 +170,8 @@ def extract_tables_from_pdf(pdf_path: str, pdf_id: str) -> None:
 # MAIN PIPELINE (GENERIC)
 # ============================================================
 
+# Runs the full stage-1 extraction pipeline for one PDF: text, embedded
+# images, and best-effort table images, ensuring all output dirs exist first.
 def process_pdf(pdf_path: str) -> None:
     """
     Generic: given a PDF path, generate Parsed_Data outputs:
@@ -181,6 +204,8 @@ def process_pdf(pdf_path: str) -> None:
     extract_tables_from_pdf(pdf_path, pdf_id)
 
 
+# Entry point for CLI use: resets the output folders, then processes the
+# single PDF path passed in from the command line.
 def main(pdf_path: str) -> None:
     prepare_output_dirs([
         TEXT_OUTPUT,
