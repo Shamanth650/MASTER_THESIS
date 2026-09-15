@@ -1,7 +1,16 @@
 # screen5b_generate_python.py
+# ------------------------------------------------------------
+# Responsible for: Generating the CARLA Python script for the current
+# scenario via the RAG pipeline, showing the resulting code with a download
+# button, and providing navigation to the alternative XOSC generation path.
+# Maintainer: shamanth.adiga@ltts.com
+# ------------------------------------------------------------
 import streamlit as st
 from ui_utils import navigate_to, show_progress, get_rag_functions
 
+# Renders the Python generation screen: auto-generates the scenario's
+# Python script on first arrival, shows the resulting code with a download
+# button, and offers navigation to other generation paths.
 def show():
     show_progress()
 
@@ -16,7 +25,7 @@ def show():
     generate_python, generate_xosc = get_rag_functions()
 
     if not generate_python:
-        st.error("❌ Python generation function not available!")
+        st.error("Python generation function not available!")
         return
 
     # Auto-generate once when arriving
@@ -25,9 +34,9 @@ def show():
             try:
                 py_code = generate_python(current_scenario, provider=provider)
                 st.session_state.python_code[scenario_name] = py_code
-                st.success("✅ Python generated!")
+                st.success("Python generated!")
             except Exception as e:
-                st.error(f"❌ Generation failed: {e}")
+                st.error(f"Generation failed: {e}")
         st.session_state.auto_generate = None
 
     # Show code + download
@@ -35,7 +44,7 @@ def show():
         st.code(st.session_state.python_code[scenario_name], language="python", line_numbers=True)
 
         st.download_button(
-            "📥 DOWNLOAD PYTHON",
+            "DOWNLOAD PYTHON",
             st.session_state.python_code[scenario_name],
             file_name=filename,
             mime="text/x-python",
@@ -67,5 +76,5 @@ def show():
         if st.button("← Back to Scenario Selection", use_container_width=True):
             navigate_to("features")
     with c4:
-        if st.button("🔄 Start Over", use_container_width=True):
+        if st.button("Start Over", use_container_width=True):
             navigate_to("standards")
