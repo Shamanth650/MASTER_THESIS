@@ -1,6 +1,13 @@
 """
 screen6_carla_launcher.py
 Streamlit page for launching CARLA and ScenarioRunner automatically.
+
+------------------------------------------------------------
+Responsible for: Launching the CARLA simulator and ScenarioRunner as
+background subprocesses, streaming their logs into the UI, tracking their
+running/finished/crashed status, and letting the user stop them again.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 import subprocess
@@ -19,6 +26,9 @@ _log_buffers = {
 }
 
 
+# Renders the CARLA launcher screen and defines all its nested helpers:
+# builds the CARLA/ScenarioRunner launch commands, wires up session-state
+# defaults, and lays out the status/controls/logs/navigation UI sections.
 def show():
 
     CARLA_ROOT = os.path.expanduser("~/CARLA_0.9.15")
@@ -56,6 +66,9 @@ def show():
         if k not in st.session_state:
             st.session_state[k] = v
 
+    # Reads a subprocess's stdout line by line into the shared log buffer,
+    # flips the status to "running" once the ready marker appears, and sets
+    # a final "finished"/"crashed" status based on the exit code once the process ends.
     def stream_logs(process, log_key, status_key, ready_marker=None):
         for line in iter(process.stdout.readline, b""):
             decoded = line.decode("utf-8", errors="replace").rstrip()
@@ -66,6 +79,8 @@ def show():
         if st.session_state.get(status_key) not in ("stopped",):
             st.session_state[status_key] = "finished" if rc == 0 else "crashed"
 
+    # Starts the CARLA simulator as a background process and spawns a
+    # daemon thread to stream its logs and update its status.
     def launch_carla():
         st.session_state["carla_status"] = "starting"
         _log_buffers["carla_logs"] = []
@@ -85,6 +100,9 @@ def show():
             daemon=True
         ).start()
 
+    # Starts ScenarioRunner against the given XOSC file as a background
+    # process (with PYTHONPATH set up for CARLA), and spawns a daemon
+    # thread to stream its logs and update its status.
     def launch_scenario(xosc_path):
         st.session_state["scenario_status"] = "starting"
         _log_buffers["scenario_logs"] = []
@@ -112,6 +130,8 @@ def show():
             daemon=True
         ).start()
 
+    # Terminates both the CARLA and ScenarioRunner processes (if running)
+    # and resets all their session-state tracking back to "stopped"/None.
     def stop_all():
         for key in ["carla_process", "scenario_process"]:
             proc = st.session_state.get(key)
@@ -127,20 +147,15 @@ def show():
         st.session_state["carla_launched"] = False
         st.session_state["scenario_launched"] = False
 
-    STATUS_ICONS = {
-        "stopped": "⚪", "starting": "🟡", "running": "🟢",
-        "finished": "✅", "crashed": "🔴", "error": "🔴",
-    }
-
+    # Renders a single "label: STATUS" line for a process's current status.
     def status_badge(label, status):
-        icon = STATUS_ICONS.get(status, "⚪")
-        st.markdown(f"**{label}:** {icon} `{status.upper()}`")
+        st.markdown(f"**{label}:** `{status.upper()}`")
 
-    st.title("🚗 Launch in CARLA")
+    st.title("Launch in CARLA")
     st.markdown("Automates launching CARLA and running the generated scenario in ScenarioRunner.")
     st.divider()
 
-    st.subheader("📁 Scenario File")
+    st.subheader("Scenario File")
     xosc_path = st.text_input(
         "Path to generated .xosc file",
         value=st.session_state.get(
@@ -151,7 +166,7 @@ def show():
     )
     st.divider()
 
-    st.subheader("📊 Status")
+    st.subheader("Status")
     col1, col2 = st.columns(2)
     with col1:
         status_badge("CARLA Simulator", st.session_state["carla_status"])
@@ -159,13 +174,13 @@ def show():
         status_badge("Scenario Runner", st.session_state["scenario_status"])
     st.divider()
 
-    st.subheader("🎮 Controls")
+    st.subheader("Controls")
     col1, col2, col3, col4 = st.columns(4)
 
     # Button 1: Launch CARLA only
     with col1:
         carla_running = st.session_state["carla_status"] in ("starting", "running")
-        if st.button("🚀 Launch CARLA", type="primary", use_container_width=True,
+        if st.button("Launch CARLA", type="primary", use_container_width=True,
                      disabled=carla_running):
             launch_carla()
             st.rerun()
@@ -174,23 +189,23 @@ def show():
     with col2:
         carla_ready = st.session_state["carla_launched"]
         scenario_running = st.session_state["scenario_status"] in ("starting", "running")
-        if st.button("▶️ Run Scenario", type="primary", use_container_width=True,
+        if st.button("Run Scenario", type="primary", use_container_width=True,
                      disabled=(not carla_ready or scenario_running)):
             if not os.path.exists(xosc_path):
-                st.error(f"❌ XOSC file not found: {xosc_path}")
+                st.error(f"XOSC file not found: {xosc_path}")
             else:
                 launch_scenario(xosc_path)
                 st.rerun()
 
     # Button 3: Refresh
     with col3:
-        if st.button("🔄 Refresh", use_container_width=True):
+        if st.button("Refresh", use_container_width=True):
             st.rerun()
 
     # Button 4: Stop All
     with col4:
         has_processes = st.session_state["carla_launched"] or st.session_state["scenario_launched"]
-        if st.button("🛑 Stop All", type="secondary", use_container_width=True,
+        if st.button("Stop All", type="secondary", use_container_width=True,
                      disabled=not has_processes):
             stop_all()
             st.success("All processes stopped.")
@@ -198,19 +213,19 @@ def show():
 
     # Help text
     if not st.session_state["carla_launched"]:
-        st.info("💡 Step 1: Launch CARLA first. Wait ~30 seconds for it to start.")
+        st.info("Step 1: Launch CARLA first. Wait ~30 seconds for it to start.")
     elif st.session_state["carla_status"] == "starting":
-        st.warning("⏳ CARLA is starting... Wait for status to turn 🟢 before running scenario.")
+        st.warning("CARLA is starting... Wait for status to turn RUNNING before running scenario.")
     elif st.session_state["carla_status"] == "running" and not st.session_state["scenario_launched"]:
-        st.success("✅ CARLA is ready! Click 'Run Scenario' to start.")
+        st.success("CARLA is ready! Click 'Run Scenario' to start.")
 
     st.divider()
 
-    st.subheader("📋 Live Logs")
+    st.subheader("Live Logs")
     log_col1, log_col2 = st.columns(2)
 
     with log_col1:
-        st.markdown("**🖥️ CARLA Simulator Logs**")
+        st.markdown("**CARLA Simulator Logs**")
         carla_logs = _log_buffers["carla_logs"]
         if carla_logs:
             st.code("\n".join(carla_logs[-50:]), language="bash")
@@ -218,7 +233,7 @@ def show():
             st.info("No logs yet. Launch CARLA to see output.")
 
     with log_col2:
-        st.markdown("**🏁 Scenario Runner Logs**")
+        st.markdown("**Scenario Runner Logs**")
         scenario_logs = _log_buffers["scenario_logs"]
         if scenario_logs:
             st.code("\n".join(scenario_logs[-50:]), language="bash")
@@ -232,7 +247,7 @@ def show():
     st.divider()
 
     # Navigation
-    st.subheader("🔀 Navigation")
+    st.subheader("Navigation")
     nav1, nav2, nav3 = st.columns(3)
 
     with nav1:
@@ -246,6 +261,6 @@ def show():
             navigate_to("features")
 
     with nav3:
-        if st.button("🔄 Start Over", use_container_width=True):
+        if st.button("Start Over", use_container_width=True):
             stop_all()
             navigate_to("standards")
