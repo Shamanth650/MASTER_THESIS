@@ -10,6 +10,14 @@ can be changed via dropdown and are applied to the generated XOSC.
 Fields not yet verified as safe to apply are shown read-only, so the
 engineer can still see and confirm exactly what the protocol specifies,
 without the tool pretending it can safely act on every one of them yet.
+
+------------------------------------------------------------
+Responsible for: Showing the engineer every protocol field the extraction
+pipeline populated for the chosen scenario, letting them adjust the
+fields verified safe to override, and forwarding their selections to the
+XOSC/Python generation screen.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 import streamlit as st
@@ -17,6 +25,10 @@ from ui_utils import navigate_to, show_progress
 from parameter_overrides import get_available_overrides
 
 
+# Renders the parameter-review screen: editable protocol fields as
+# dropdowns, display-only protocol fields as read-only text, and an actor
+# (vehicle/VRU model) selector, then stores the user's choices in session
+# state before continuing to generation.
 def show():
     show_progress()
 
@@ -29,7 +41,7 @@ def show():
     st.markdown("<br>", unsafe_allow_html=True)
 
     if current_scenario is None:
-        st.error("❌ No scenario selected. Please go back and choose one.")
+        st.error("No scenario selected. Please go back and choose one.")
         if st.button("← Back to Code Generation"):
             navigate_to("generate")
         return
@@ -49,7 +61,7 @@ def show():
     new_selections = {}
 
     # ----- Editable protocol fields -----
-    st.markdown("#### ✏️ Adjustable parameters (extracted from the protocol)")
+    st.markdown("#### Adjustable parameters (extracted from the protocol)")
     if editable_fields:
         for field, spec in editable_fields.items():
             options = spec["options"]
@@ -68,13 +80,13 @@ def show():
     # ----- Display-only protocol fields -----
     if display_only_fields:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("#### 📋 Extracted from the protocol")
+        st.markdown("#### Extracted from the protocol")
         for field, spec in display_only_fields.items():
             st.write(f"**{spec['label']}:** {spec['default']}")
 
     # ----- Actor selection (category-derived, editable) -----
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("#### 🚗 Actor selection")
+    st.markdown("#### Actor selection")
     
     for field, spec in category_fields.items():
         options = spec["options"]
