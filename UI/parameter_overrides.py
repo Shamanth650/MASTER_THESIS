@@ -1,32 +1,12 @@
 # parameter_overrides.py - Field-driven parameter override logic
 """
-Detects which protocol-extracted fields are actually populated for a given
-scenario, and applies user-selected overrides deterministically to a
-generated XOSC string.
-
-Core rules:
-1. A field is only ever shown to the engineer if the extraction pipeline
-   populated it as non-null for THIS specific scenario. Null fields are
-   never fabricated into an option.
-2. A field is only marked EDITABLE if its application logic has been
-   verified against a real generated XOSC file. Everything else that is
-   genuinely populated is still shown, for transparency, but read-only.
-3. Entity identification never hardcodes "adversary" — it looks for
-   whichever entity is not "hero", since "hero" is the only name
-   confirmed universal across every scenario family.
-4. Ego/target speed is only editable for CCRs, CCRm, CCRb, and only at
-   the specific speed options in _VERIFIED_CCR_SPEED_TABLE below.
-5. apply_canonical_corrections() ALWAYS forces the correct AEB trigger
-   for CCFtap/CCFtab/CCFhos/CCCscp after generation, regardless of what
-   the LLM produced.
-6. apply_wide_spawn_correction() ALWAYS widens the spawn gap for
-   CCFhos/CCFhol specifically, since their default 36.82m gap is too
-   short for their real protocol speeds even with a corrected trigger —
-   this is a spawn-geometry fix, not just a trigger tweak, and has NOT
-   been run on CARLA. CCCscp is intentionally excluded from this and
-   from any trigger revision below 48.0, per explicit decision to
-   retain its original values despite an unresolved flagged concern —
-   see Limitations.
+------------------------------------------------------------
+Responsible for: Determining which protocol-extracted fields are safe to
+show and edit for a given scenario, and deterministically patching a
+generated XOSC file's XML with the engineer's chosen overrides plus
+always-run canonical trigger and wide-spawn corrections for specific scenarios.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -98,20 +78,26 @@ _NAME_TO_SCENARIO_CODE = {
 # -------------------------
 # Scenario JSON helpers
 # -------------------------
+# Returns a scenario's "scenario_details" block, or the scenario dict
+# itself if that key isn't present (for legacy/flat scenario shapes).
 def _get_details(scenario: Dict[str, Any]) -> Dict[str, Any]:
     return scenario.get("scenario_details", scenario) or {}
 
 
+# Returns a scenario's scenario_details.extra block, or an empty dict if absent.
 def _get_extra(scenario: Dict[str, Any]) -> Dict[str, Any]:
     details = _get_details(scenario)
     return details.get("extra", {}) or {}
 
 
+# Returns a scenario's scenario_details.extra.allowed_values block, or an empty dict if absent.
 def _get_allowed_values(scenario: Dict[str, Any]) -> Dict[str, Any]:
     extra = _get_extra(scenario)
     return extra.get("allowed_values", {}) or {}
 
 
+# Returns a scenario's code, falling back to looking its display name up
+# in the name-to-code table when scenario_code isn't set directly.
 def _get_scenario_code(scenario: Dict[str, Any]) -> Optional[str]:
     code = scenario.get("scenario_code")
     if code:
@@ -120,6 +106,8 @@ def _get_scenario_code(scenario: Dict[str, Any]) -> Optional[str]:
     return _NAME_TO_SCENARIO_CODE.get(name)
 
 
+# Determines which vehicle-catalog category (car/cyclist/motorcyclist/
+# pedestrian) applies to a scenario's non-hero actor, based on its ADAS family and VRU type.
 def _actor_category(scenario: Dict[str, Any]) -> str:
     extra = _get_extra(scenario)
     family = (extra.get("adas_family") or "").upper()
@@ -138,6 +126,11 @@ def _actor_category(scenario: Dict[str, Any]) -> str:
 # -------------------------
 # Detection: what to show the engineer
 # -------------------------
+# Builds the full dict of overridable fields for a scenario -- generic
+# protocol fields (overlap, headway, decel, speeds), the verified CCR speed
+# table when applicable, TTC/impact-point/speed-pair/lane-change display-only
+# fields, and the actor vehicle-model choice -- including only fields the
+# extraction pipeline actually populated.
 def get_available_overrides(scenario: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     details = _get_details(scenario)
     allowed = _get_allowed_values(scenario)
@@ -145,6 +138,9 @@ def get_available_overrides(scenario: Dict[str, Any]) -> Dict[str, Dict[str, Any
     scenario_code = _get_scenario_code(scenario)
     overrides: Dict[str, Dict[str, Any]] = {}
 
+    # Registers one override entry for `field` if the extraction pipeline
+    # populated it (as a list of allowed values or a single value), skipping
+    # it entirely if it's null.
     def _add(field: str, label: str, unit: str = "", editable: bool = False):
         list_val = allowed.get(field)
         single_val = details.get(field)
@@ -230,12 +226,16 @@ def get_available_overrides(scenario: Dict[str, Any]) -> Dict[str, Dict[str, Any
 # -------------------------
 # Application: writing choices into the XOSC
 # -------------------------
+# Converts an overlap percentage into the lateral lane-position offset (in
+# meters) needed to achieve that overlap given the vehicle's width.
 def _lateral_offset_from_overlap(overlap_percent: float, vehicle_width_m: float = 1.85) -> float:
     fraction_uncovered = 1.0 - (abs(overlap_percent) / 100.0)
     offset = fraction_uncovered * vehicle_width_m
     return offset if overlap_percent >= 0 else -offset
 
 
+# Finds the name of the scenario's non-hero entity (the target/adversary),
+# since "hero" is the only entity name guaranteed consistent across scenarios.
 def _non_hero_entity_name(root: ET.Element) -> Optional[str]:
     for obj in root.iter("ScenarioObject"):
         name = obj.get("name")
@@ -244,6 +244,8 @@ def _non_hero_entity_name(root: ET.Element) -> Optional[str]:
     return None
 
 
+# Yields every ManeuverGroup in the XOSC that references the given entity
+# name as one of its actors.
 def _maneuver_groups_for_entity(root: ET.Element, entity_name: str):
     for group in root.iter("ManeuverGroup"):
         actors = group.find("Actors")
@@ -255,6 +257,8 @@ def _maneuver_groups_for_entity(root: ET.Element, entity_name: str):
                 break
 
 
+# Finds the entity's ManeuverGroup that contains a "come to a stop" action
+# (an AbsoluteTargetSpeed of 0.0), used to locate braking-related conditions to patch.
 def _find_stop_action_group(root: ET.Element, entity_name: str) -> Optional[ET.Element]:
     for group in _maneuver_groups_for_entity(root, entity_name):
         for target in group.iter("AbsoluteTargetSpeed"):
@@ -263,6 +267,8 @@ def _find_stop_action_group(root: ET.Element, entity_name: str) -> Optional[ET.E
     return None
 
 
+# Sets the value of every ParameterDeclaration matching the given name,
+# returning True if at least one was found and updated.
 def _set_parameter_value(root: ET.Element, param_name: str, new_value: str) -> bool:
     applied = False
     for decl in root.iter("ParameterDeclaration"):
@@ -272,6 +278,11 @@ def _set_parameter_value(root: ET.Element, param_name: str, new_value: str) -> b
     return applied
 
 
+# Parses the XOSC and applies each user-selected override (overlap,
+# vehicle model, headway, deceleration, CCR-verified speeds) to the
+# corresponding XML elements, collecting a warning wherever an expected
+# element isn't found so the change silently fails visibly instead of
+# silently doing nothing.
 def apply_overrides_to_xosc(
     xosc_code: str, overrides: Dict[str, Any], scenario: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
@@ -397,6 +408,10 @@ def apply_overrides_to_xosc(
     return {"xosc": patched, "warnings": warnings}
 
 
+# Always-run (independent of user overrides) correction that forces the
+# hero's AEB trigger distance to the known-good canonical value for
+# CCFtap/CCFtab/CCCscp, skipping CCFhos/CCFhol which get the combined
+# spawn+trigger fix in apply_wide_spawn_correction instead.
 def apply_canonical_corrections(xosc_code: str, scenario: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Always-run correction, independent of any user override selection.
@@ -445,6 +460,10 @@ def apply_canonical_corrections(xosc_code: str, scenario: Optional[Dict[str, Any
     return {"xosc": patched, "warnings": warnings}
 
 
+# Always-run correction for CCFhos/CCFhol only: widens the adversary's
+# spawn gap by a fixed delta and sets both entities' AEB trigger distances
+# to the wider-gap-appropriate value, since the default spawn gap is too
+# short for their real protocol speeds.
 def apply_wide_spawn_correction(xosc_code: str, scenario: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """
     CCFhos and CCFhol only. Widens the adversary's spawn gap by 40m and
