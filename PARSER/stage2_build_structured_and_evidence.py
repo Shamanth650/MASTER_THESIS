@@ -34,6 +34,14 @@ IMPORTANT CHANGE (2026-01-xx):
     - diagram_image
 - We also attach image candidate metadata (type/page/path) to support the Step-1 LLM matcher
   (anchor_pages ± 1) and avoid sending huge image sets.
+
+------------------------------------------------------------
+Responsible for: Turning the raw Stage-1 knowledge base into two outputs --
+structured_scenarios.json (a clean per-scenario skeleton for every anchor
+found) and scenario_evidence.json (a scored, page-aware evidence pack of
+supporting text and images per scenario) for Stage 3 LLM enrichment to consume.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -75,6 +83,9 @@ _LSS_NEGATIVE_ANCHOR_PHRASES = (
     "evidence of the effectiveness",
 )
 
+# Determines whether an LSS anchor is likely a "container" heading (a
+# figure/table caption or generic system-level mention) rather than a real,
+# testable sub-scenario, using a mix of positive and negative phrase hints.
 def _is_probable_container_anchor(a: Dict[str, Any]) -> bool:
     at = (a.get("anchor_type") or "").upper().strip()
     if at != "LSS":
@@ -97,6 +108,8 @@ def _is_probable_container_anchor(a: Dict[str, Any]) -> bool:
 
     return True
 
+# Removes any anchor flagged as a probable container/noise anchor,
+# keeping only anchors that look like real testable scenarios.
 def _filter_noise_anchors(anchors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [a for a in anchors if not _is_probable_container_anchor(a)]
 
@@ -183,6 +196,8 @@ SPEED_PAIR_RX = re.compile(r"\b(\d{2,3})\s*/\s*(\d{2,3})\b")
 # ---------------------------
 LEGACY_TEXT_KEYS = ("filtered", "text", "combined_text", "raw_text", "full_text")
 
+# Coerces a knowledge-base "content" value (which may be a string, list,
+# or dict) into a single flat text string for scoring/searching.
 def _as_text(content: Any) -> str:
     if content is None:
         return ""
@@ -204,6 +219,9 @@ def _as_text(content: Any) -> str:
         return json.dumps(content, ensure_ascii=False)
     return str(content)
 
+# Loads the knowledge-base JSON from the given path (falling back to
+# common alternate filenames), normalizing whatever top-level shape it has
+# (list, dict, or bare string) into a flat list of item dicts.
 def _load_kb(path: str) -> List[Dict[str, Any]]:
     candidates = [path, "knowledge_base_raw.json", "knowledge_base.json"]
     kb_path = None
@@ -237,6 +255,8 @@ def _load_kb(path: str) -> List[Dict[str, Any]]:
 
     return []
 
+# Concatenates all non-image text items from the knowledge base into one
+# document string, inserting "[PAGE N]" markers whenever the page number changes.
 def _kb_to_full_text(kb_items: List[Any]) -> str:
     out: List[str] = []
     last_page = None
@@ -267,6 +287,7 @@ def _kb_to_full_text(kb_items: List[Any]) -> str:
 # ---------------------------
 # Image indexing + candidate selection (NO page_image)
 # ---------------------------
+# Normalizes a page value (int, digit-string, or None) into a plain int or None.
 def _norm_page(page: Any) -> Optional[int]:
     if page is None:
         return None
@@ -276,6 +297,8 @@ def _norm_page(page: Any) -> Optional[int]:
         return int(page)
     return None
 
+# Extracts an image's relative path from a KB item, checking meta.path,
+# then a top-level path field, then the file name, in that order.
 def _get_image_rel_path(it: Dict[str, Any]) -> Optional[str]:
     meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
     p = meta.get("path")
@@ -287,6 +310,8 @@ def _get_image_rel_path(it: Dict[str, Any]) -> Optional[str]:
     f = it.get("file")
     return f if isinstance(f, str) and f.strip() else None
 
+# Builds a page-number -> {table_image: [...], diagram_image: [...]}
+# lookup from the knowledge base, ignoring any other image source types.
 def _index_images_by_page(kb_items: List[Dict[str, Any]]) -> Dict[int, Dict[str, List[str]]]:
     """
     Index only table_image + diagram_image by page.
@@ -316,6 +341,8 @@ def _index_images_by_page(kb_items: List[Dict[str, Any]]) -> Dict[int, Dict[str,
 
     return dict(out)
 
+# Collects and de-duplicates table/diagram image paths for a list of
+# selected pages, returning them in the legacy {table_images, diagram_images} shape.
 def _select_image_candidates(
     selected_pages: Optional[List[int]],
     img_index: Dict[int, Dict[str, List[str]]]
@@ -349,6 +376,8 @@ def _select_image_candidates(
 
     return {"table_images": _dedupe(tables), "diagram_images": _dedupe(diags)}
 
+# Same page-based image lookup as _select_image_candidates, but returns
+# richer metadata dicts (type/page/path) for consumption by the LLM image picker.
 def _select_image_candidates_meta(
     selected_pages: Optional[List[int]],
     img_index: Dict[int, Dict[str, List[str]]]
@@ -388,6 +417,8 @@ def _select_image_candidates_meta(
 # ---------------------------
 # NEW: fallback page selection for images
 # ---------------------------
+# Pulls the page numbers recorded in a structured scenario's
+# scenario_details.extra.evidence list, de-duplicated in order.
 def _extract_anchor_pages_from_structured(scenario: Dict[str, Any]) -> List[int]:
     """
     Read pages from:
@@ -413,6 +444,8 @@ def _extract_anchor_pages_from_structured(scenario: Dict[str, Any]) -> List[int]
         out.append(p)
     return out
 
+# Widens a list of page numbers into a sorted set covering +/- `expand`
+# pages around each one, used to broaden the image search window.
 def _expand_pages(pages: List[int], expand: int) -> List[int]:
     if not pages:
         return []
@@ -423,6 +456,8 @@ def _expand_pages(pages: List[int], expand: int) -> List[int]:
                 out.add(q)
     return sorted(out)
 
+# Last-resort fallback: returns up to `cap` pages that have any indexed
+# images at all, used when no better page localization is available.
 def _fallback_pages_with_any_images(img_index: Dict[int, Dict[str, List[str]]], cap: int) -> List[int]:
     """
     If we cannot localize pages at all, at least attach some images rather than 0/0 everywhere.
@@ -437,6 +472,8 @@ def _fallback_pages_with_any_images(img_index: Dict[int, Dict[str, List[str]]], 
 # ---------------------------
 # Structured skeleton
 # ---------------------------
+# Finds ego/target speed pairs (e.g. "50/30") in a text block and returns
+# them as a de-duplicated list of {ego_speed_kmh, target_speed_kmh} dicts.
 def _extract_speed_pairs(block: str) -> List[Dict[str, int]]:
     out: List[Dict[str, int]] = []
     seen = set()
@@ -449,6 +486,8 @@ def _extract_speed_pairs(block: str) -> List[Dict[str, int]]:
         out.append({"ego_speed_kmh": a, "target_speed_kmh": b})
     return out
 
+# Removes duplicate structured scenario entries, keying on scenario_code
+# (falling back to a normalized scenario_name) and keeping only the first occurrence.
 def _dedupe_by_code_or_name(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seen = set()
     out = []
@@ -462,6 +501,9 @@ def _dedupe_by_code_or_name(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         out.append(s)
     return out
 
+# Drops "umbrella" scenario entries whose code is only a parent alias of
+# more specific sibling scenario codes already present in the same batch,
+# since the specific siblings already cover that umbrella heading.
 def _drop_umbrella_parent_scenarios(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Some Euro NCAP headings (e.g. "Car-to-Car Front Head-On (CCFho)") are umbrella
@@ -502,6 +544,10 @@ def _drop_umbrella_parent_scenarios(items: List[Dict[str, Any]]) -> List[Dict[st
     return out
 
 
+# Converts a raw anchor dict into the structured scenario skeleton:
+# classifies it ADAS vs NON_ADAS, and for ADAS anchors builds the full
+# scenario_details/user_config skeleton (including LSS/VRU-specific extra
+# fields) with all numeric fields left as null placeholders for Stage 3 to fill.
 def _make_structured_from_anchor(a: Dict[str, Any]) -> Dict[str, Any]:
     scenario_type = classify_adas_vs_non_adas(a)
     code = (a.get("scenario_code") or "").strip() or None
@@ -618,13 +664,19 @@ def _make_structured_from_anchor(a: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------
 # Evidence selection (text-only scoring)
 # ---------------------------
+# Counts how many numeric tokens appear in a text string using the
+# module-level NUM_RX pattern.
 def _count_numbers(text: str) -> int:
     return len(NUM_RX.findall(text or ""))
 
+# Counts how many of the module-level PARAM_KEYWORDS appear (case-insensitively) in a text string.
 def _keyword_hits(text: str) -> int:
     t = (text or "").lower()
     return sum(1 for kw in PARAM_KEYWORDS if kw in t)
 
+# Generates alternate name forms (family prefix, VRU umbrella term, LSS
+# system tokens, etc.) for a scenario code so evidence scoring can match
+# text mentioning any of its aliases, not just the exact code.
 def _aliases_for_code(code: str) -> List[str]:
     if not code:
         return []
@@ -650,6 +702,10 @@ def _aliases_for_code(code: str) -> List[str]:
                 aliases.add(tok)
     return sorted(aliases)
 
+# Scores one knowledge-base text item for how well it serves as evidence
+# for a given scenario code/name, rewarding code/name matches, parameter
+# keywords, numeric density, and table/figure references, while penalizing
+# glossary-style language, so parameter-table sections score highest.
 def _score_item(blob: str, code: Optional[str], name: Optional[str], page: Optional[int]) -> int:
     """Score a KB text item for evidence selection.
 
@@ -745,6 +801,9 @@ def _score_item(blob: str, code: Optional[str], name: Optional[str], page: Optio
 
     return score
 
+# Scores every text item in the knowledge base against a scenario's
+# code/name, picks the top-K highest-scoring items (plus their immediate
+# neighbors for context), and falls back to a head+tail sample if nothing scored.
 def _select_evidence_indices(kb_items: List[Any], code: Optional[str], name: Optional[str]) -> Tuple[List[int], Dict[str, Any]]:
     scored: List[Tuple[int, int]] = []
     for idx, it in enumerate(kb_items):
@@ -794,6 +853,9 @@ def _select_evidence_indices(kb_items: List[Any], code: Optional[str], name: Opt
 
     return sorted(chosen_set), dbg
 
+# Assembles the selected knowledge-base text items (by index) into one
+# page-labeled document string for a scenario's evidence pack, truncating
+# if it exceeds the configured character limit.
 def _build_doc_text(kb_items: List[Any], idxs: List[int]) -> str:
     parts: List[str] = []
     for i in idxs:
@@ -818,6 +880,11 @@ def _build_doc_text(kb_items: List[Any], idxs: List[int]) -> str:
     return doc
 
 
+# Stage-2 entry point: loads the knowledge base, extracts and filters
+# scenario anchors, builds and deduplicates the structured scenario list,
+# then for every ADAS scenario selects evidence text/images (with page
+# fallbacks) and writes structured_scenarios.json, scenario_evidence.json,
+# and the evidence report to disk.
 def main():
     kb_items = _load_kb(KB_PATH)
 
