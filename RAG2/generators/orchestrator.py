@@ -8,6 +8,13 @@ Purpose:
 AEB demo policy:
 - No silent fallback XOSC for AEB (always disabled).
 - Provider routing is controlled by UI selection ("openai" or "claude").
+
+------------------------------------------------------------
+Responsible for: Being the single high-level entry point UI/CLI code calls
+to generate both artifacts (CARLA Python script and XOSC file) for one
+scenario, routing to the right provider and enforcing the AEB no-fallback safety policy.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -22,6 +29,9 @@ from .xosc_generator import generate_xosc_rag
 LLMProvider = Literal["openai", "claude"]
 
 
+# Generates both the Python and XOSC artifacts for a scenario, forcing the
+# XOSC deterministic fallback off for AEB scenarios regardless of the
+# caller's preference, and returns both artifacts in one dict.
 def generate_scenario_artifacts(
     scenario: Dict[str, Any],
     *,
