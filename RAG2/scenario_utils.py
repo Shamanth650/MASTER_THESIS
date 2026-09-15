@@ -10,6 +10,14 @@ Design goal (per your final requirement):
 - Parser output may contain nulls.
 - Nulls must NOT be treated as missing mandatory inputs.
 - Codegen must not crash because validation hard-failed.
+
+------------------------------------------------------------
+Responsible for: Providing null-tolerant scenario helpers -- ADAS family
+detection, AEB variant inference, and soft (never-raising) validation that
+attaches non-persistent runtime_hints/warnings for generators to consult,
+instead of hard-failing on missing user_config fields.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -21,19 +29,25 @@ import re
 # Safe getters
 # -----------------------------------------------------------------------------
 
+# Returns a scenario's "user_config" block, or an empty dict if missing/not a dict.
 def _get_uc(s: Dict[str, Any]) -> Dict[str, Any]:
     return (s.get("user_config") or {}) if isinstance(s, dict) else {}
 
+# Returns a scenario's "scenario_details" block, or an empty dict if missing/not a dict.
 def _get_sd(s: Dict[str, Any]) -> Dict[str, Any]:
     return (s.get("scenario_details") or {}) if isinstance(s, dict) else {}
 
+# Returns a scenario's scenario_details.extra block, or an empty dict if missing.
 def _get_extra(s: Dict[str, Any]) -> Dict[str, Any]:
     sd = _get_sd(s)
     return (sd.get("extra") or {}) if isinstance(sd, dict) else {}
 
+# Returns a scenario's "classification" block, or an empty dict if missing/not a dict.
 def _get_classification(s: Dict[str, Any]) -> Dict[str, Any]:
     return (s.get("classification") or {}) if isinstance(s, dict) else {}
 
+# Walks a dot-separated key path through nested dicts, returning `default`
+# if any step is missing or the final value is None.
 def _get_path(obj: Any, path: str, default: Any = None) -> Any:
     """
     Safe dot-path getter.
@@ -46,6 +60,7 @@ def _get_path(obj: Any, path: str, default: Any = None) -> Any:
         cur = cur[key]
     return default if cur is None else cur
 
+# Treats both None and empty string as "empty" for soft-validation purposes.
 def _is_empty(v: Any) -> bool:
     return v is None or v == ""
 
@@ -53,6 +68,9 @@ def _is_empty(v: Any) -> bool:
 # Family detection
 # -----------------------------------------------------------------------------
 
+# Determines the scenario's ADAS family by checking, in order: the
+# extra.adas_family tag, classification.family, then scenario-name keyword
+# heuristics, defaulting to "AEB" if nothing matches.
 def _family_of(s: Dict[str, Any]) -> str:
     """
     Determine scenario family: AEB / LSS / VRU.
@@ -93,6 +111,9 @@ _AEB_VARIANTS = [
     ("cccscp", re.compile(r"\bCCCscp\b", re.IGNORECASE)),
 ]
 
+# Soft-infers the AEB scenario variant (ccrs/ccrm/ccrb/etc.) from
+# classification.variant first, falling back to a regex match against the
+# scenario name, or "unknown" if neither yields a match.
 def _infer_aeb_variant(s: Dict[str, Any]) -> str:
     """
     Soft inference for AEB scenario variant.
@@ -110,6 +131,8 @@ def _infer_aeb_variant(s: Dict[str, Any]) -> str:
 
     return "unknown"
 
+# Appends a non-blocking warning message to the scenario's
+# runtime_hints.warnings list (in place), creating that structure if it doesn't exist yet.
 def _add_warning(s: Dict[str, Any], msg: str) -> None:
     """
     Attach warnings under runtime_hints.warnings (non-persistent).
@@ -125,6 +148,8 @@ def _add_warning(s: Dict[str, Any], msg: str) -> None:
     if isinstance(warnings, list):
         warnings.append(msg)
 
+# Attaches non-persistent runtime_hints to the scenario (currently just
+# the inferred AEB variant for AEB-family scenarios) without altering the canonical schema.
 def _attach_runtime_hints(s: Dict[str, Any]) -> None:
     """
     Attach non-persistent runtime hints for generators/LLM.
@@ -146,6 +171,10 @@ def _attach_runtime_hints(s: Dict[str, Any]) -> None:
 # Soft validation (NEVER raises for missing fields)
 # -----------------------------------------------------------------------------
 
+# Walks every user_config field that generators care about (map/entities/
+# termination/trigger/dynamics/layout/behavior/VRU motion) and attaches a
+# soft warning for each one that's null or only partially specified,
+# without ever raising except when the scenario itself isn't a dict.
 def _ensure_mandatory_user_config(s: Dict[str, Any]) -> None:
     """
     Historically this function hard-failed scenarios missing certain user_config
@@ -267,6 +296,9 @@ def _ensure_mandatory_user_config(s: Dict[str, Any]) -> None:
 # Optional normalization helpers (safe, minimal)
 # -----------------------------------------------------------------------------
 
+# Public wrapper around _ensure_mandatory_user_config that guarantees no
+# exception ever escapes -- any internal error is itself recorded as a
+# warning on the scenario rather than propagated.
 def ensure_runtime_hints(s: Dict[str, Any]) -> Dict[str, Any]:
     """
     Public helper: attach runtime_hints and soft warnings, without raising.
