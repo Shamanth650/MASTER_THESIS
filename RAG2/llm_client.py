@@ -1,11 +1,12 @@
 """
 RAG2/llm_client.py
-
-IMPROVED VERSION:
-- Better Claude response handling
-- More robust JSON extraction
-- Clearer error messages
-- Support for Claude's thinking process
+------------------------------------------------------------
+Responsible for: Providing a single provider-agnostic entry point
+(call_llm_json) for calling either OpenAI or Claude and getting back a
+parsed JSON dict, with robust extraction of JSON from messy model output
+and automatic retries with stronger instructions on parse failure.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -24,6 +25,9 @@ from .config import OPENAI_MODEL
 # JSON extraction (robust)
 # -----------------------------
 
+# Tries progressively more forgiving strategies (direct parse, markdown
+# fence stripping, "here's the JSON:"-style marker detection, then a
+# brace-balanced scan) to pull the first valid JSON object out of raw LLM text.
 def _extract_first_json_object(text: str) -> Optional[Dict[str, Any]]:
     """
     Extract and parse the first JSON object found in model output.
@@ -128,6 +132,8 @@ def _extract_first_json_object(text: str) -> Optional[Dict[str, Any]]:
 # OpenAI call
 # -----------------------------
 
+# Sends a system/user prompt pair to the OpenAI chat completions API
+# (model/temperature/seed drawn from config or env) and returns the raw text response.
 def _openai_call(
     system_prompt: str,
     user_prompt: str,
@@ -171,6 +177,9 @@ def _openai_call(
 # Claude call (IMPROVED)
 # -----------------------------
 
+# Sends a system/user prompt pair to Claude, preferring the anthropic SDK
+# and falling back to a raw HTTPS request to the Messages API if the SDK
+# is missing or errors, returning the concatenated text of the response.
 def _claude_call(
     system_prompt: str,
     user_prompt: str,
@@ -315,6 +324,9 @@ def _claude_call(
 # Public API (IMPROVED)
 # -----------------------------
 
+# High-level entry point: calls the chosen provider (OpenAI or Claude),
+# extracts JSON from the response, and retries with a stronger
+# JSON-only instruction on failure, raising a detailed error if every attempt fails.
 def call_llm_json(
     system_prompt: str,
     user_prompt: str,
