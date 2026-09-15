@@ -1,4 +1,11 @@
 # screen5a_generate_xosc.py
+# ------------------------------------------------------------
+# Responsible for: Generating the XOSC (OpenSCENARIO) file for the current
+# scenario via the RAG pipeline, applying user parameter overrides and
+# deterministic canonical/spawn corrections, then offering it for download
+# and for launching directly in CARLA.
+# Maintainer: shamanth.adiga@ltts.com
+# ------------------------------------------------------------
 import streamlit as st
 from ui_utils import navigate_to, show_progress, get_rag_functions
 from parameter_overrides import (
@@ -7,6 +14,9 @@ from parameter_overrides import (
     apply_wide_spawn_correction,
 )
 
+# Renders the XOSC generation screen: auto-generates the scenario's XOSC on
+# first arrival, applies any parameter overrides and always-run corrections,
+# shows the resulting code with a download button and a CARLA launch button.
 def show():
     show_progress()
 
@@ -21,7 +31,7 @@ def show():
     generate_python, generate_xosc = get_rag_functions()
 
     if not generate_xosc:
-        st.error("❌ XOSC generation function not available!")
+        st.error("XOSC generation function not available!")
         return
 
     # Auto-generate once when arriving
@@ -50,21 +60,21 @@ def show():
                 st.session_state["override_warnings"].extend(spawn_result["warnings"])
 
                 st.session_state.xosc_code[scenario_name] = xosc_code
-                st.success("✅ XOSC generated!")
+                st.success("XOSC generated!")
             except Exception as e:
-                st.error(f"❌ Generation failed: {e}")
+                st.error(f"Generation failed: {e}")
         st.session_state.auto_generate = None
 
     # Show any override warnings from the last generation
     for warning in st.session_state.get("override_warnings", []):
-        st.warning(f"⚠️ {warning}")
+        st.warning(f"{warning}")
 
     # Show code + download
     if scenario_name in st.session_state.xosc_code:
         st.code(st.session_state.xosc_code[scenario_name], language="xml", line_numbers=True)
 
         st.download_button(
-            "📥 DOWNLOAD XOSC",
+            "DOWNLOAD XOSC",
             st.session_state.xosc_code[scenario_name],
             file_name=filename,
             mime="application/xml",
@@ -83,7 +93,7 @@ def show():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        if st.button("🚀 Launch in CARLA", type="primary", use_container_width=True):
+        if st.button("Launch in CARLA", type="primary", use_container_width=True):
             navigate_to("carla_launcher")
 
     else:
@@ -111,5 +121,5 @@ def show():
         if st.button("← Back to Scenario Selection", use_container_width=True):
             navigate_to("features")
     with c4:
-        if st.button("🔄 Start Over", use_container_width=True):
+        if st.button("Start Over", use_container_width=True):
             navigate_to("standards")
