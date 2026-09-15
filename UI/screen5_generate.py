@@ -1,8 +1,17 @@
 # screen5_generate.py
+# ------------------------------------------------------------
+# Responsible for: Letting the user pick which selected scenario to
+# generate code for (when more than one was selected), then routing to the
+# parameter-review screen for either XOSC or Python generation.
+# Maintainer: shamanth.adiga@ltts.com
+# ------------------------------------------------------------
 
 import streamlit as st
 from ui_utils import navigate_to, show_progress, get_scenario_name
 
+# Renders the code-generation entry screen: a scenario picker (if multiple
+# scenarios were selected) and two buttons routing to parameter review for
+# XOSC or Python generation.
 def show():
     show_progress()
 
@@ -10,14 +19,14 @@ def show():
     st.markdown("<br>", unsafe_allow_html=True)
 
     if not st.session_state.selected_scenarios:
-        st.error("❌ No scenarios selected!")
+        st.error("No scenarios selected!")
         if st.button("← Back to Features"):
             navigate_to('features')
         return
 
     # Scenario selector (keep as-is)
     if len(st.session_state.selected_scenarios) > 1:
-        st.markdown("### 📋 Select Scenario")
+        st.markdown("### Select Scenario")
         scenario_names = [
             get_scenario_name(s, i)
             for i, s in enumerate(st.session_state.selected_scenarios)
@@ -66,5 +75,5 @@ def show():
         if st.button("← Back", use_container_width=True):
             navigate_to('features')
     with nav3:
-        if st.button("🔄 Start Over", use_container_width=True):
+        if st.button("Start Over", use_container_width=True):
             navigate_to('standards')
