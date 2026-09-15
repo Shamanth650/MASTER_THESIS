@@ -1,6 +1,17 @@
+# screen1_standards.py
+# ------------------------------------------------------------
+# Responsible for: Rendering the first screen of the wizard, where the
+# engineer picks which safety-testing standard (Euro NCAP, China NCAP,
+# Japan NCAP, California NCAP) to generate scenarios for, and advances to
+# the upload screen once Euro NCAP (the only currently supported standard) is chosen.
+# Maintainer: shamanth.adiga@ltts.com
+# ------------------------------------------------------------
+
 import streamlit as st
 from ui_utils import navigate_to
 
+# Renders the standards-selection screen: styled title, a 2x2 grid of
+# standard buttons, and a success message confirming the current selection.
 def show():
     """Display standards selection screen"""
 
@@ -43,22 +54,22 @@ def show():
     col3, col4 = st.columns(2, gap="large")
 
     with col1:
-        if st.button("🇪🇺  EURO NCAP", use_container_width=True, key="euro"):
+        if st.button("EURO NCAP", use_container_width=True, key="euro"):
             st.session_state.selected_standard = "EURO NCAP"
             navigate_to("upload")
 
     with col2:
-        if st.button("🇨🇳  CHINA NCAP", use_container_width=True, key="china"):
+        if st.button("CHINA NCAP", use_container_width=True, key="china"):
             st.session_state.selected_standard = "CHINA NCAP"
             st.info("China NCAP support coming soon!")
 
     with col3:
-        if st.button("🇯🇵  JAPAN NCAP", use_container_width=True, key="japan"):
+        if st.button("JAPAN NCAP", use_container_width=True, key="japan"):
             st.session_state.selected_standard = "JAPAN NCAP"
             st.info("Japan NCAP support coming soon!")
 
     with col4:
-        if st.button("🇺🇸  CALIFORNIA NCAP", use_container_width=True, key="california"):
+        if st.button("CALIFORNIA NCAP", use_container_width=True, key="california"):
             st.session_state.selected_standard = "CALIFORNIA NCAP"
             st.info("California NCAP support coming soon!")
 
