@@ -17,6 +17,13 @@
 #  - ONLY table images are sent to the LLM.
 #  - Diagram images may exist in outputs, but this script ignores them entirely.
 # ------------------------------------------------------------
+#
+# Responsible for: Reading scenario evidence produced by Stage 2, finding the
+# candidate table images relevant to each scenario, downsizing them into
+# cheap thumbnails, asking an OpenAI vision model to pick the right ones,
+# and writing the validated selections to scenario_image_selection.json.
+# Maintainer: shamanth.adiga@ltts.com
+# ------------------------------------------------------------
 
 from __future__ import annotations
 
@@ -78,9 +85,13 @@ MAX_SCENARIOS = int(os.getenv("LLM_MAX_SCENARIOS", "0"))
 # -----------------------------
 _PAGE_RX = re.compile(r"(?:^|[_\-])p(\d{1,4})(?:[_\-]|\.|$)", re.IGNORECASE)
 
+# Normalizes Windows-style backslashes in a path to forward slashes for
+# consistent regex matching and display.
 def _norm_slashes(p: str) -> str:
     return p.replace("\\", "/")
 
+# Resolves an image path recorded by Stage 2 into a real filesystem path,
+# trying it as absolute, then relative to Parsed_Data, then relative to BASE_DIR.
 def _resolve_under_parsed_data(rel_or_abs: str) -> str:
     """
     Resolves image paths saved by Stage2:
@@ -106,6 +117,8 @@ def _resolve_under_parsed_data(rel_or_abs: str) -> str:
 
     return candidate  # best effort
 
+# Extracts a page number embedded in a filename/path (e.g. "..._p12_...")
+# using the module-level page regex; returns None if no match is found.
 def _infer_page_from_path(path: str) -> Optional[int]:
     if not path:
         return None
@@ -117,14 +130,19 @@ def _infer_page_from_path(path: str) -> Optional[int]:
     except Exception:
         return None
 
+# Loads and parses a JSON file from disk, returning whatever object it contains.
 def _load_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+# Serializes a Python object to a JSON file on disk with UTF-8 encoding
+# and pretty-printed indentation.
 def _dump_json(path: str, obj: Any) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
+# Safely coerces a value to an int, accepting real ints or digit-only
+# strings and returning None for anything else.
 def _safe_int(x: Any) -> Optional[int]:
     if x is None:
         return None
@@ -134,6 +152,8 @@ def _safe_int(x: Any) -> Optional[int]:
         return int(x)
     return None
 
+# Pulls the list of "selected_pages" out of a scenario evidence entry,
+# coerces each to int, and de-duplicates while preserving order.
 def _extract_anchor_pages(evid_entry: Dict[str, Any]) -> List[int]:
     pages = evid_entry.get("selected_pages")
     out: List[int] = []
@@ -152,6 +172,8 @@ def _extract_anchor_pages(evid_entry: Dict[str, Any]) -> List[int]:
         final.append(p)
     return final
 
+# Expands a list of anchor page numbers into a sorted set of pages within
+# +/- `expand` of each anchor, used to widen the search window around a scenario.
 def _page_window(pages: List[int], expand: int) -> List[int]:
     if not pages:
         return []
@@ -162,6 +184,8 @@ def _page_window(pages: List[int], expand: int) -> List[int]:
                 s.add(q)
     return sorted(s)
 
+# Opens an image file, downsizes it to at most THUMB_MAX_SIDE on its
+# longest edge, and returns it as a base64-encoded JPEG data URL for the LLM call.
 def _make_thumbnail_data_url(image_path: str) -> str:
     if Image is None:
         raise RuntimeError(f"Pillow import failed: {_PIL_IMPORT_ERROR}. Install: pip install pillow")
@@ -186,6 +210,9 @@ class TableCandidate:
     rel_path: str
     abs_path: str
 
+# Builds the list of candidate table images for a scenario, preferring the
+# newer "image_candidates_meta" format and falling back to the legacy
+# "image_candidates.table_images" list if the newer one isn't present.
 def _gather_table_candidates(evid_entry: Dict[str, Any]) -> List[TableCandidate]:
     """
     Prefer image_candidates_meta (type=table).
@@ -224,6 +251,8 @@ def _gather_table_candidates(evid_entry: Dict[str, Any]) -> List[TableCandidate]
 
     return out
 
+# Narrows the candidate list down to those whose page falls inside the
+# expanded anchor-page window; if that empties the list, falls back to all candidates.
 def _filter_by_anchor_pages(cands: List[TableCandidate], anchor_pages: List[int]) -> List[TableCandidate]:
     if not cands:
         return []
@@ -233,6 +262,8 @@ def _filter_by_anchor_pages(cands: List[TableCandidate], anchor_pages: List[int]
     filtered = [c for c in cands if (c.page is None or c.page in win)]
     return filtered if filtered else cands
 
+# Sorts candidates (known pages first, then by page, then filename) and
+# truncates to MAX_TABLE_CANDIDATES, reassigning sequential indices for the LLM prompt.
 def _cap_tables(cands: List[TableCandidate]) -> List[TableCandidate]:
     # Prefer known pages first; stable ordering by page then filename
     cands_sorted = sorted(
@@ -246,6 +277,8 @@ def _cap_tables(cands: List[TableCandidate]) -> List[TableCandidate]:
         out.append(TableCandidate(idx=new_i, page=c.page, rel_path=c.rel_path, abs_path=c.abs_path))
     return out
 
+# Assembles the natural-language prompt sent to the LLM: scenario info,
+# a truncated text excerpt, the indexed table candidate list, and the required JSON schema.
 def _build_prompt(scenario_code: Optional[str], scenario_name: Optional[str], doc_text: str, tables: List[TableCandidate]) -> str:
     doc_short = (doc_text or "").strip()
     if len(doc_short) > 2200:
@@ -277,6 +310,8 @@ def _build_prompt(scenario_code: Optional[str], scenario_name: Optional[str], do
         "- If nothing matches, return empty list and confidence 0.\n"
     )
 
+# Sends the prompt and thumbnail images to the OpenAI chat completions
+# API, retrying with backoff and progressively shrinking the thumbnail set on failure.
 def _call_openai(client: Any, prompt: str, thumb_data_urls: List[str]) -> Dict[str, Any]:
     content = [{"type": "text", "text": prompt}]
     for du in thumb_data_urls:
@@ -304,6 +339,8 @@ def _call_openai(client: Any, prompt: str, thumb_data_urls: List[str]) -> Dict[s
 
     raise RuntimeError(f"OpenAI picker failed after retries: {last_err}")
 
+# Sanitizes the raw LLM JSON response: clamps selected indices to the
+# valid range, coerces confidence to a float in [0,1], and truncates notes.
 def _validate_output(obj: Any, max_idx: int) -> Dict[str, Any]:
     if not isinstance(obj, dict):
         return {"selected_table_indices": [], "confidence": 0.0, "notes": "invalid output"}
@@ -345,6 +382,9 @@ def _validate_output(obj: Any, max_idx: int) -> Dict[str, Any]:
 # -----------------------------
 # Main
 # -----------------------------
+# Drives the end-to-end picker run: loads scenario evidence, for each
+# scenario gathers/filters/caps table candidates, builds thumbnails, calls
+# the LLM to pick the right tables, and writes all results to the output JSON.
 def main() -> None:
     print("[llm_image_picker] START (TABLES ONLY)")
     print("  evidence :", EVIDENCE_PATH)
