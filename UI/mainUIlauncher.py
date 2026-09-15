@@ -2,6 +2,13 @@
 """
 ADASynAI - ADAS Scenario Generator
 Run with: streamlit run mainUIlauncher.py
+
+------------------------------------------------------------
+Responsible for: Bootstrapping the Streamlit app (page config, global CSS,
+session state), and routing to the correct screen module based on the
+current page stored in session state.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 import streamlit as st
@@ -19,7 +26,6 @@ import screen6_carla_launcher
 
 st.set_page_config(
     page_title="ADASynAI - Scenario Generator",
-    page_icon="🚗",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -27,6 +33,8 @@ st.set_page_config(
 apply_custom_css()
 init_session_state()
 
+# Reads the current page from session state and dispatches to that
+# screen's show() function; falls back to the standards screen if the page name is unrecognized.
 def main():
     page = get_current_page()
 
@@ -49,7 +57,7 @@ def main():
     elif page == 'carla_launcher':
         screen6_carla_launcher.show()
     else:
-        st.error(f"❌ Unknown page: {page}")
+        st.error(f"Unknown page: {page}")
         st.session_state.page = 'standards'
         st.rerun()
 
