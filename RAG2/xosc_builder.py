@@ -9,6 +9,13 @@ This module:
 - Does NOT use RAG
 - Does NOT use LLMs
 - Does NOT query Chroma
+
+------------------------------------------------------------
+Responsible for: Building a minimal, always-valid OpenSCENARIO (.xosc) XML
+document directly from a scenario's user_config values, as a deterministic
+fallback path when the LLM-based generator fails or is disabled.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -17,6 +24,9 @@ from typing import Dict, Any
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 
+# Constructs a bare-bones but schema-valid OpenSCENARIO document (header,
+# a single Ego entity, and a storyboard with one speed-setting maneuver and
+# stop trigger) and serializes it to an XML string.
 def _build_xosc_v5(scenario: Dict[str, Any]) -> str:
     """
     Build a minimal valid OpenSCENARIO XML from scenario JSON.
