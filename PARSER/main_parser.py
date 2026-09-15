@@ -30,6 +30,14 @@ Notes
 -----
 - This module does NOT call the Scenario generation LLM.
 - It prepares a clean scenario snippet that downstream generators can consume.
+
+------------------------------------------------------------
+Responsible for: Orchestrating the entire PDF-to-scenario pipeline end to
+end -- running Stage 1 (raw extraction), Stage 2 (structuring + evidence),
+optional Stage 3 (LLM enrichment), normalizing every scenario into one
+uniform ADAS schema, and triggering the final accuracy-report generation.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -57,6 +65,8 @@ from PARSER.llm_enricher import enrich_all
 # Helpers
 # -----------------------------------------------------------------------------
 
+# Deletes a directory tree, retrying on Windows PermissionError (common
+# when a file handle hasn't been released yet) before giving up gracefully.
 def safe_rmtree(path: str, retries: int = 8, delay: float = 0.35) -> bool:
     for _ in range(retries):
         try:
@@ -70,6 +80,8 @@ def safe_rmtree(path: str, retries: int = 8, delay: float = 0.35) -> bool:
     return True
 
 
+# Resolves the project root two levels above this file, independent of
+# whatever working directory the caller (e.g. Streamlit) was launched from.
 def _project_root() -> Path:
     """
     Resolve project root robustly, regardless of Streamlit CWD.
@@ -127,10 +139,13 @@ _VRU_HINTS = (
 )
 
 
+# Uppercases and strips a value, coercing None/non-strings to an empty string first.
 def _safe_upper(v: Any) -> str:
     return str(v or "").strip().upper()
 
 
+# Normalizes a raw family label (or scenario code/name heuristics) into one
+# of the three canonical ADAS families plus an optional subtype.
 def _parse_family_and_subtype(
     raw: Any, scenario_code: str = "", scenario_name: str = ""
 ) -> Tuple[str, Optional[str]]:
@@ -201,10 +216,13 @@ def _parse_family_and_subtype(
     return "AEB", None
 
 
+# Returns the value unchanged if it's already a dict, otherwise an empty dict.
 def _ensure_dict(v: Any) -> Dict[str, Any]:
     return v if isinstance(v, dict) else {}
 
 
+# Walks a chain of nested dict keys (a "path") and returns the value found,
+# or the given default if any step along the path is missing or not a dict.
 def _get_nested(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
     cur: Any = d
     for p in path:
@@ -214,6 +232,8 @@ def _get_nested(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
     return default if cur is None else cur
 
 
+# Determines and writes the normalized ADAS family (and subtype, if any)
+# into scenario_details.extra on the given scenario dict, in place.
 def _tag_adas_family(s: Dict[str, Any]) -> None:
     """Attach normalized adas family tags to scenario_details.extra."""
     if not isinstance(s, dict):
@@ -239,6 +259,8 @@ def _tag_adas_family(s: Dict[str, Any]) -> None:
         extra.pop("adas_subtype", None)
 
 
+# Inspects the scenario name/code/family to detect a special variant (e.g.
+# rear-stationary AEB, LSS cut-in, VRU dooring) used to pre-create extension blocks.
 def _detect_variant(scenario_name: str, scenario_code: str, family: str) -> Optional[str]:
     """Detect special variants to pre-create extension blocks (null placeholders)."""
     name_u = _safe_upper(scenario_name)
@@ -268,6 +290,8 @@ def _detect_variant(scenario_name: str, scenario_code: str, family: str) -> Opti
     return None
 
 
+# Returns the extra placeholder fields (currently only the "door" block for
+# dooring scenarios) that should be pre-created for a detected variant.
 def _default_extensions_for_variant(variant: Optional[str]) -> Dict[str, Any]:
     """Return extension blocks with null placeholders when a special variant is detected."""
     if variant == "dooring":
@@ -336,12 +360,16 @@ _ALLOWED_TERMINATION = {"timeout_s", "stop_on_collision"}
 _ALLOWED_EXTENSIONS = {"notes", "door"}  # door is optional variant extension
 
 
+# Filters a dict down to only the keys present in `allowed`, dropping
+# everything else; returns an empty dict if the input isn't a dict.
 def _dict_keep_only(d: Dict[str, Any], allowed: set) -> Dict[str, Any]:
     if not isinstance(d, dict):
         return {}
     return {k: d.get(k) for k in allowed if k in d}
 
 
+# Rebuilds a scenario dict keeping strictly the canonical uniform-schema
+# keys at every nesting level, discarding any legacy or duplicate fields.
 def _sanitize_uniform_scenario(out: Dict[str, Any]) -> Dict[str, Any]:
     """Enforce ONLY the canonical uniform schema and delete everything else."""
     if not isinstance(out, dict):
@@ -398,6 +426,9 @@ def _sanitize_uniform_scenario(out: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
+# Maps a parsed (Stage-2/3) scenario dict, whose fields may live under many
+# different legacy key names, into the single canonical uniform schema
+# consumed by the rest of the pipeline, then sanitizes the result.
 def _build_uniform_schema(master: Dict[str, Any]) -> Dict[str, Any]:
     """Convert a parsed scenario dict into the uniform schema."""
     sd = _ensure_dict(master.get("scenario_details"))
@@ -547,6 +578,9 @@ def _build_uniform_schema(master: Dict[str, Any]) -> Dict[str, Any]:
 # Main pipeline
 # -----------------------------------------------------------------------------
 
+# Determines the path to the Stage-1 knowledge-base JSON file, preferring
+# the path pdf_to_json_raw itself declares, then falling back through a
+# list of common candidate locations.
 def _resolve_kb_path() -> Path:
     """
     After pdf_to_json_raw.build_knowledge_base() runs, resolve the KB file path.
@@ -582,6 +616,10 @@ def _resolve_kb_path() -> Path:
     return (PROJECT_ROOT / "knowledge_base_raw.json").resolve()
 
 
+# Top-level entry point: writes the uploaded PDF to disk, runs Stage 1
+# (parsing + knowledge base), Stage 2 (structuring + evidence), optional
+# Stage 3 (LLM enrichment), converts every scenario to the uniform schema,
+# and finally kicks off the PDF accuracy report -- returning the uniform scenarios.
 def run_full_pipeline_for_pdf(
     pdf_bytes: bytes,
     filename: str,
@@ -740,12 +778,12 @@ def run_full_pipeline_for_pdf(
             protocol_version="4.3.1"
         )
         
-        print(f"[main_parser] ✅ Accuracy report generated: {out_report_pdf}")
+        print(f"[main_parser] Accuracy report generated: {out_report_pdf}")
         
     except ImportError:
-        print("[main_parser] ⚠️ report_generator not found - skipping report generation")
+        print("[main_parser] report_generator not found - skipping report generation")
     except Exception as e:
-        print(f"[main_parser] ⚠️ Report generation failed: {e}")
+        print(f"[main_parser] Report generation failed: {e}")
         # Don't fail the whole pipeline if report generation fails
 
     return uniform_out
