@@ -6,6 +6,14 @@ Generates a professional PDF report analyzing the quality of scenario extraction
 from Euro NCAP test protocol PDFs by comparing the original PDF with extracted JSON.
 
 Uses Claude AI to perform intelligent comparison and accuracy grading.
+
+------------------------------------------------------------
+Responsible for: Grading the accuracy of the pipeline's scenario extraction
+by sending the extracted scenarios to Claude for expert review against
+Euro NCAP protocol knowledge, then rendering the graded findings into a
+polished, multi-section PDF accuracy report.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -38,6 +46,9 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 # LLM Analysis Functions
 # ============================================================================
 
+# Sends a slimmed-down version of the extracted scenarios to Claude with a
+# detailed grading rubric, parses the streamed JSON verdict, and falls back
+# to a basic ungraded analysis if the API call or parsing fails.
 def analyze_extraction_with_claude(
     pdf_path: str,
     scenarios: List[Dict[str, Any]],
@@ -229,6 +240,8 @@ Return ONLY the JSON object, no other text, no markdown fences.
         return _create_fallback_analysis(scenarios)
 
 
+# Builds a minimal, ungraded analysis structure (grade 0, no parameters) to
+# use as a safe fallback whenever the Claude grading call can't be completed.
 def _create_fallback_analysis(scenarios: List[Dict]) -> Dict[str, Any]:
     """Create a basic analysis when LLM call fails."""
     return {
@@ -261,6 +274,8 @@ def _create_fallback_analysis(scenarios: List[Dict]) -> Dict[str, Any]:
 # PDF Report Generation
 # ============================================================================
 
+# Counts VRU-prefixed vs AEB-prefixed scenario codes in the analysis to
+# infer which Euro NCAP protocol was parsed, and returns a matching title/label pair.
 def _detect_protocol_title(analysis: Dict[str, Any]) -> Tuple[str, str]:
     """
     Derive the report's title/subtitle from the actual scenario codes present,
@@ -284,6 +299,9 @@ def _detect_protocol_title(analysis: Dict[str, Any]) -> Tuple[str, str]:
     return "Euro NCAP Test Protocol", "Unspecified"
 
 
+# Lays out the full multi-page PDF report (title, ToC, executive summary,
+# scenario overview table, per-scenario detail, quality assessment, and
+# conclusions) using ReportLab, then writes the finished PDF to output_path.
 def create_pdf_report(
     analysis: Dict[str, Any],
     output_path: str,
@@ -575,6 +593,9 @@ def create_pdf_report(
 # Main Function
 # ============================================================================
 
+# Public entry point: loads the extracted scenarios JSON, runs the Claude
+# accuracy analysis, and renders the resulting PDF report, printing progress
+# messages at each stage and returning the output PDF path.
 def generate_accuracy_report(
     pdf_path: str,
     scenarios_json_path: str,
@@ -585,23 +606,23 @@ def generate_accuracy_report(
     """Generate a comprehensive parsing accuracy report."""
 
     print("=" * 60)
-    print("📊 GENERATING PARSING ACCURACY REPORT")
+    print(" GENERATING PARSING ACCURACY REPORT")
     print("=" * 60)
 
-    print(f"📂 Loading scenarios from: {scenarios_json_path}")
+    print(f" Loading scenarios from: {scenarios_json_path}")
     with open(scenarios_json_path, 'r', encoding='utf-8') as f:
         scenarios = json.load(f)
 
-    print(f"✅ Loaded {len(scenarios)} scenarios")
+    print(f" Loaded {len(scenarios)} scenarios")
 
-    print("🤖 Analyzing extraction quality with Claude AI...")
+    print(" Analyzing extraction quality with Claude AI...")
     analysis = analyze_extraction_with_claude(pdf_path, scenarios, api_key)
 
-    print("📄 Creating PDF report...")
+    print(" Creating PDF report...")
     create_pdf_report(analysis, output_pdf_path, protocol_version)
 
     print("=" * 60)
-    print(f"✅ REPORT COMPLETE: {output_pdf_path}")
+    print(f" REPORT COMPLETE: {output_pdf_path}")
     print("=" * 60)
 
     return output_pdf_path
