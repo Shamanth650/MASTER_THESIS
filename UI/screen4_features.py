@@ -3,12 +3,22 @@
 SCREEN 4: Features Selection and Report Generation
 User selects which scenarios to generate code for
 Can download parsing accuracy report (automatically generated during parsing)
+
+------------------------------------------------------------
+Responsible for: Offering the parsing accuracy report for download (if it
+was generated), and letting the user select which of the parsed scenarios
+to carry forward into code generation.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 import streamlit as st
 from pathlib import Path
 from ui_utils import navigate_to, show_progress, get_scenario_name
 
+# Renders the features screen: looks up and offers the parsing accuracy
+# report for download, then shows a checkbox list of every parsed scenario
+# so the user can select which ones to generate code for.
 def show():
     """Display features selection and report generation screen"""
     
@@ -20,7 +30,7 @@ def show():
     st.markdown("<br>", unsafe_allow_html=True)
     
     # ===== REPORT GENERATION =====
-    st.markdown("### 📊 Parsing Accuracy Report")
+    st.markdown("### Parsing Accuracy Report")
     
     st.write("Download a detailed analysis of the extraction quality:")
     
@@ -50,7 +60,7 @@ def show():
                 report_bytes = f.read()
             
             st.download_button(
-                label="📥 Download the parsing accuracy report",
+                label="Download the parsing accuracy report",
                 data=report_bytes,
                 file_name="Euro_NCAP_Scenario_Analysis_Report.pdf",
                 mime="application/pdf",
@@ -58,31 +68,31 @@ def show():
                 key="download_report"
             )
             
-            st.success(f"✅ Report ready! ({len(report_bytes) / 1024:.1f} KB)")
+            st.success(f"Report ready! ({len(report_bytes) / 1024:.1f} KB)")
             
         else:
             # Report doesn't exist - show placeholder
             if st.button(
-                "📥 Download the parsing accuracy report",
+                "Download the parsing accuracy report",
                 use_container_width=True,
                 disabled=True,
                 key="report_placeholder"
             ):
                 pass
             
-            st.warning("⚠️ Report not found. It will be generated automatically during PDF parsing.")
+            st.warning("Report not found. It will be generated automatically during PDF parsing.")
             
             # Show where we looked
-            #with st.expander("🔍 Debug: Report search paths"):
+            #with st.expander("Debug: Report search paths"):
              #   st.write("Searched for report in:")
               #  for path in possible_report_paths:
-               #     exists_icon = "✅" if path.exists() else "❌"
+               #     exists_icon = "" if path.exists() else ""
                 #    st.write(f"{exists_icon} {path}")
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
     # Info box about the report
-    with st.expander("ℹ️ About the Parsing Accuracy Report"):
+    with st.expander("About the Parsing Accuracy Report"):
         st.markdown("""
         The **Parsing Accuracy Report** is a professional PDF document that contains:
         
@@ -96,7 +106,7 @@ def show():
     st.markdown("<br>", unsafe_allow_html=True)
     
     # ===== SCENARIO SELECTION =====
-    st.markdown("### ✅ Select Scenarios")
+    st.markdown("### Select Scenarios")
     st.write("Choose which scenarios you want to generate code for:")
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -106,12 +116,12 @@ def show():
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         
         with col1:
-            if st.button("✅ Select All"):
+            if st.button("Select All"):
                 st.session_state.selected_scenarios = st.session_state.parsed_scenarios.copy()
                 st.rerun()
         
         with col2:
-            if st.button("❌ Deselect All"):
+            if st.button("Deselect All"):
                 st.session_state.selected_scenarios = []
                 st.rerun()
         
@@ -154,14 +164,14 @@ def show():
         total_count = len(st.session_state.parsed_scenarios)
         
         if selected_count == 0:
-            st.error(f"❌ No scenarios selected (0 / {total_count})")
+            st.error(f"No scenarios selected (0 / {total_count})")
         elif selected_count == total_count:
-            st.success(f"✅ All scenarios selected ({selected_count} / {total_count})")
+            st.success(f"All scenarios selected ({selected_count} / {total_count})")
         else:
-            st.info(f"✅ Selected: {selected_count} / {total_count} scenarios")
+            st.info(f"Selected: {selected_count} / {total_count} scenarios")
     
     else:
-        st.error("❌ No scenarios available")
+        st.error("No scenarios available")
         st.info("Please go back and upload a PDF to parse scenarios.")
     
     st.markdown("<br>", unsafe_allow_html=True)
