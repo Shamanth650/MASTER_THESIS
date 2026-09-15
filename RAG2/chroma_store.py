@@ -9,6 +9,14 @@ Purpose:
 Key functions:
 - retrieve_context(query_text, k=TOP_K): semantic retrieval
 - retrieve_context_filtered(query_text, where=..., k=...): metadata-filtered retrieval (for templates/rules later)
+
+------------------------------------------------------------
+Responsible for: Owning all ChromaDB access for the RAG pipeline -- the
+persistent client and collection (bootstrapped with minimal docs if
+empty), ingesting the knowledge_base templates/rules into it, and
+providing semantic and metadata-filtered retrieval helpers for the generators.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -52,6 +60,9 @@ from pathlib import Path
 import uuid
 
 
+# Walks the knowledge_base folder's Python-template, XOSC-template, and
+# rule subdirectories, embeds each .txt file's contents, and adds it to the
+# Chroma collection tagged with a family (AEB/VRU/LSS/UNKNOWN) inferred from its filename.
 def ingest_knowledge_base():
     """
     Ingest templates and rules from RAG2/knowledge_base into Chroma.
@@ -98,6 +109,8 @@ def ingest_knowledge_base():
                 metadatas=[meta],
             )
 
+# Lazily creates (and caches at module level) a persistent Chroma client
+# pointed at CHROMA_DIR, so the same on-disk database is reused across calls.
 def _persistent_client() -> chromadb.Client:
     """
     Create (or reuse) a persistent Chroma client that stores data on disk.
@@ -114,6 +127,8 @@ def _persistent_client() -> chromadb.Client:
     return _client
 
 
+# Gets (or creates) the configured Chroma collection, and bootstraps it
+# with the minimal BOOTSTRAP_SNIPPETS docs if it's currently empty.
 def _ensure_chroma():
     """
     Ensure the configured collection exists.
@@ -142,6 +157,9 @@ def _ensure_chroma():
     return coll
 
 
+# Embeds the query text and runs a plain semantic (nearest-neighbor)
+# search against the Chroma collection, returning the top-k matching
+# documents with their metadata.
 def retrieve_context(query_text: str, k: int | None = None) -> List[Dict[str, Any]]:
     """
     Semantic retrieval from Chroma (your current rag.py behavior).
@@ -171,6 +189,9 @@ def retrieve_context(query_text: str, k: int | None = None) -> List[Dict[str, An
     return hits
 
 
+# Same semantic search as retrieve_context, but additionally constrains
+# results to documents matching the given Chroma metadata filter (e.g. a
+# specific doc_type/family/version combination).
 def retrieve_context_filtered(
     query_text: str,
     *,
@@ -213,4 +234,4 @@ def retrieve_context_filtered(
     return hits
 if __name__ == "__main__":
     ingest_knowledge_base()
-    print("✅ Knowledge base ingested into Chroma")
+    print("Knowledge base ingested into Chroma")
