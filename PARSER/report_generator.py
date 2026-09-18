@@ -46,16 +46,60 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 # LLM Analysis Functions
 # ============================================================================
 
+# Max characters of knowledge_base.json text to inline into the grading
+# prompt. Keeps the grader grounded in the actual document instead of
+# relying purely on Claude's pretrained knowledge of the protocol family.
+MAX_KB_CONTEXT_CHARS = int(os.getenv("REPORT_MAX_KB_CONTEXT_CHARS", "80000"))
+
+
+# Loads knowledge_base.json and concatenates its text entries (skipping
+# image-metadata entries, which carry no content) into one page-labeled
+# string for use as grounding context in the grading prompt.
+def _load_kb_text(knowledge_base_path: Optional[str]) -> str:
+    if not knowledge_base_path:
+        return ""
+    try:
+        with open(knowledge_base_path, "r", encoding="utf-8") as f:
+            kb_items = json.load(f)
+    except Exception as e:
+        print(f" [WARN] Could not load knowledge_base.json for grading context: {e}")
+        return ""
+
+    if not isinstance(kb_items, list):
+        return ""
+
+    parts: List[str] = []
+    for it in kb_items:
+        if not isinstance(it, dict):
+            continue
+        if (it.get("type") or "text").lower().strip() == "image":
+            continue
+        content = it.get("content")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        page = it.get("page")
+        hdr = f"[PAGE {page}]" if page is not None else "[PAGE ?]"
+        parts.append(f"{hdr}\n{content.strip()}")
+
+    text = "\n\n".join(parts).strip()
+    if len(text) > MAX_KB_CONTEXT_CHARS:
+        text = text[:MAX_KB_CONTEXT_CHARS] + "\n\n[TRUNCATED]"
+    return text
+
+
 # Sends a slimmed-down version of the extracted scenarios to Claude with a
 # detailed grading rubric, parses the streamed JSON verdict, and falls back
 # to a basic ungraded analysis if the API call or parsing fails.
 def analyze_extraction_with_claude(
     pdf_path: str,
     scenarios: List[Dict[str, Any]],
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
+    knowledge_base_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Use Claude to analyze extraction accuracy by comparing PDF with JSON.
+    Use Claude to analyze extraction accuracy by comparing the extracted JSON
+    against the actual source protocol text (knowledge_base.json), not just
+    Claude's own pretrained knowledge of the Euro NCAP standard.
     """
     try:
         from anthropic import Anthropic
@@ -70,6 +114,8 @@ def analyze_extraction_with_claude(
 
     client = Anthropic(api_key=api_key)
 
+    kb_text = _load_kb_text(knowledge_base_path)
+
     # Slim down scenarios — strip user_config which Claude doesn't need for grading
     slim_scenarios = [
         {
@@ -83,14 +129,32 @@ def analyze_extraction_with_claude(
 
     total = len(slim_scenarios)
 
+    kb_context_block = (
+        f"""
+SOURCE PROTOCOL TEXT (extracted from the actual PDF via knowledge_base.json —
+this is the ground truth for this specific document; use it as your primary
+reference, and fall back on your own general knowledge of the Euro NCAP
+standard only where this text is silent or ambiguous):
+
+{kb_text}
+"""
+        if kb_text
+        else """
+NOTE: No source protocol text was available for this run — grade using your
+own general knowledge of the Euro NCAP standard, and flag in key_findings
+that grading was performed without direct access to the source document.
+"""
+    )
+
     prompt = f"""
 You are an expert in Euro NCAP AEB test protocols. You have deep knowledge of:
 - Euro NCAP AEB Car-to-Car protocol (CCRs, CCRm, CCRb, CCFtap, CCCscp, CCFhos, CCFhol)
 - Euro NCAP VRU protocol (CPFA, CPNA, CPNCO, CPLA, CPTA, CPRA, CBNA, CBNAO, CBFA, CBLA, CBTA, CBDA, CMRs, CMRb, CMFtap, CMoncoming, CMovertaking)
 
 I have extracted {total} test scenarios from a Euro NCAP protocol PDF using an automated parser.
-Using your knowledge of the Euro NCAP protocols, evaluate the accuracy and completeness of each
-extracted scenario below.
+Evaluate the accuracy and completeness of each extracted scenario below by comparing it against
+the source protocol text provided.
+{kb_context_block}
 
 NOTE on JSON structure: The scenario code is in the top-level "scenario_code" field and
 IS present for every scenario in this input — you do not need to check for it or
@@ -601,7 +665,8 @@ def generate_accuracy_report(
     scenarios_json_path: str,
     output_pdf_path: str = "Euro_NCAP_Scenario_Analysis_Report.pdf",
     protocol_version: str = "4.3.1",
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
+    knowledge_base_path: Optional[str] = None,
 ) -> str:
     """Generate a comprehensive parsing accuracy report."""
 
@@ -615,8 +680,13 @@ def generate_accuracy_report(
 
     print(f" Loaded {len(scenarios)} scenarios")
 
+    if knowledge_base_path:
+        print(f" Grounding grader in source text from: {knowledge_base_path}")
+    else:
+        print(" [WARN] No knowledge_base_path provided — grading will fall back to Claude's general knowledge")
+
     print(" Analyzing extraction quality with Claude AI...")
-    analysis = analyze_extraction_with_claude(pdf_path, scenarios, api_key)
+    analysis = analyze_extraction_with_claude(pdf_path, scenarios, api_key, knowledge_base_path)
 
     print(" Creating PDF report...")
     create_pdf_report(analysis, output_pdf_path, protocol_version)
@@ -636,13 +706,14 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 3:
-        print("Usage: python report_generator.py <pdf_path> <scenarios_json_path> [output_pdf_path]")
+        print("Usage: python report_generator.py <pdf_path> <scenarios_json_path> [output_pdf_path] [knowledge_base_path]")
         print("\nExample:")
-        print("  python report_generator.py euro_ncap.pdf uniform_scenarios.json report.pdf")
+        print("  python report_generator.py euro_ncap.pdf uniform_scenarios.json report.pdf knowledge_base.json")
         sys.exit(1)
 
     pdf_path = sys.argv[1]
     json_path = sys.argv[2]
     output_path = sys.argv[3] if len(sys.argv) > 3 else "Euro_NCAP_Scenario_Analysis_Report.pdf"
+    kb_path = sys.argv[4] if len(sys.argv) > 4 else None
 
-    generate_accuracy_report(pdf_path, json_path, output_path)
+    generate_accuracy_report(pdf_path, json_path, output_path, knowledge_base_path=kb_path)
