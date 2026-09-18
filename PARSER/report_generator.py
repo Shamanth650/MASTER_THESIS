@@ -192,7 +192,7 @@ ALL {total} EXTRACTED SCENARIOS:
 Return ONLY the JSON object, no other text, no markdown fences.
 """
 
-    print(f"🔄 Calling Claude to analyze {total} scenarios...")
+    print(f" Calling Claude to analyze {total} scenarios...")
 
     try:
         with client.messages.stream(
@@ -209,13 +209,13 @@ Return ONLY the JSON object, no other text, no markdown fences.
                 pass  # drain the stream; we only need the final assembled message
             message = stream.get_final_message()
     except Exception as e:
-        print(f"❌ Claude API call failed: {type(e).__name__}: {e}")
+        print(f" Claude API call failed: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
         return _create_fallback_analysis(scenarios)
 
     if getattr(message, "stop_reason", None) == "max_tokens":
-        print(f"⚠️ Response was TRUNCATED at 24000 tokens for {total} scenarios — "
+        print(f" Response was TRUNCATED at 24000 tokens for {total} scenarios — "
               f"raise max_tokens further (up to 128000 on claude-sonnet-4-6) if this recurs.")
 
     response_text = message.content[0].text
@@ -228,15 +228,15 @@ Return ONLY the JSON object, no other text, no markdown fences.
         else:
             analysis = json.loads(response_text.strip())
 
-        print(f"✅ Analysis complete! Got {len(analysis.get('scenario_analysis', []))} scenario reports.")
+        print(f" Analysis complete! Got {len(analysis.get('scenario_analysis', []))} scenario reports.")
         return analysis
 
     except json.JSONDecodeError as e:
-        print(f"⚠️ Failed to parse Claude's response as JSON: {e}")
+        print(f" Failed to parse Claude's response as JSON: {e}")
         debug_path = "last_failed_llm_response.txt"
         with open(debug_path, "w", encoding="utf-8") as f:
             f.write(response_text)
-        print(f"📝 Full raw response saved to {debug_path} — inspect it, no need to re-run to see what broke.")
+        print(f" Full raw response saved to {debug_path} — inspect it, no need to re-run to see what broke.")
         return _create_fallback_analysis(scenarios)
 
 
@@ -586,7 +586,7 @@ def create_pdf_report(
     story.append(Paragraph(conclusion_text, styles['Normal']))
 
     doc.build(story)
-    print(f"✅ Report saved to: {output_path}")
+    print(f" Report saved to: {output_path}")
 
 
 # ============================================================================
