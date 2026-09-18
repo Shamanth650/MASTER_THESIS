@@ -33,7 +33,7 @@ import os
 import json
 from dotenv import load_dotenv
 
-load_dotenv()   # 👈 THIS is what you were missing
+load_dotenv() 
 
 from anthropic import Anthropic
 
