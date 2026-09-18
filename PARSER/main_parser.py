@@ -775,7 +775,8 @@ def run_full_pipeline_for_pdf(
             pdf_path=str(pdf_path.resolve()),
             scenarios_json_path=str(out_uniform.resolve()),
             output_pdf_path=str(out_report_pdf),
-            protocol_version="4.3.1"
+            protocol_version="4.3.1",
+            knowledge_base_path=str(kb_path.resolve())
         )
         
         print(f"[main_parser] Accuracy report generated: {out_report_pdf}")
