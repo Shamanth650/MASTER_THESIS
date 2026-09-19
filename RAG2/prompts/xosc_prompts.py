@@ -83,9 +83,9 @@ VERIFIED SPAWN POSITIONS FOR TOWN01 — USE EXACTLY THESE VALUES:
     NOTE: adversary uses FollowTrajectoryAction to change lanes — see CCFhol SPECIAL RULES below
 
 SPEED SETTINGS — USE EXACTLY THESE VALUES PER SCENARIO:
-  CCRs:   heroSpeed=8.0,   adversarySpeed=0.0
-  CCRm:   heroSpeed=8.0,   adversarySpeed=3.0
-  CCRb:   heroSpeed=8.0,   adversarySpeed=8.0
+  CCRs:   heroSpeed=13.889,   adversarySpeed=0.0
+  CCRm:   heroSpeed=13.889,   adversarySpeed=9.89
+  CCRb:   heroSpeed=13.889,   adversarySpeed=13.889
   CCFtap: heroSpeed=10.0,  adversarySpeed=3.0
   CCFtab: heroSpeed=10.0,  adversarySpeed=3.0
   CCFhos: heroSpeed=8.333, adversarySpeed=8.333
