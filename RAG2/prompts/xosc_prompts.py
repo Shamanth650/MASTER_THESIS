@@ -1,14 +1,16 @@
 """
 RAG2/prompts/xosc_prompts.py
-IMPROVED VERSION v6:
-- Fixed CCRs/CCRm/CCRb spawn positions (hero behind at s=156.84, adversary ahead at s=193.66)
-- Fixed AEB brake dynamics (linear value=3.0 dynamicsDimension=time)
-- Removed criteria_DrivenDistanceTest
-- Fixed criteria_CollisionTest parameterRef
-- Added CCFhol FollowTrajectoryAction pattern (LaneChangeAction segfaults in CARLA 0.9.15)
-- Added WaitGroup pattern
-- Added full VRU requirements section
-- Validated: CARLA 0.9.15 / ScenarioRunner 0.9.16 / Town01
+Prompt definitions and prompt builder for OpenSCENARIO (XOSC) generation:
+system prompts per scenario family (AEB, LSS, VRU), the matching user
+requirement blocks, family-based prompt selection, and final prompt assembly.
+
+------------------------------------------------------------
+Responsible for: Defining the fixed Town01 spawn positions, default speeds
+and AEB trigger rules given to the LLM, choosing the system/user prompt pair
+for a scenario family, and combining the requirements, the retrieved
+ChromaDB context and the scenario JSON into the final XOSC generation prompt.
+Maintainer: shamanth.adiga@ltts.com
+------------------------------------------------------------
 """
 from __future__ import annotations
 import json
@@ -82,14 +84,28 @@ VERIFIED SPAWN POSITIONS FOR TOWN01 — USE EXACTLY THESE VALUES:
     Adversary (starts opp. lane):  <LanePosition roadId="12" laneId="1"  offset="0.0" s="193.66"/>
     NOTE: adversary uses FollowTrajectoryAction to change lanes — see CCFhol SPECIAL RULES below
 
-SPEED SETTINGS — USE EXACTLY THESE VALUES PER SCENARIO:
-  CCRs:   heroSpeed=13.889,   adversarySpeed=0.0
-  CCRm:   heroSpeed=13.889,   adversarySpeed=9.89
-  CCRb:   heroSpeed=13.889,   adversarySpeed=13.889
-  CCFtap: heroSpeed=10.0,  adversarySpeed=3.0
-  CCFtab: heroSpeed=10.0,  adversarySpeed=3.0
-  CCFhos: heroSpeed=8.333, adversarySpeed=8.333
-  CCFhol: heroSpeed=8.333, adversarySpeed=8.333
+  CCCscp (Car-to-Car Crossing Straight Crossing Path) — perpendicular roads, same layout as CCFtap:
+    Hero:                          <LanePosition roadId="4"  laneId="-1" offset="0.0" s="197.98"/>
+    Adversary:                     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
+
+DEFAULT SPEED SETTINGS (m/s) — validated defaults, used whenever user_config supplies no usable value:
+  CCRs:   heroSpeed=2.778,  adversarySpeed=0.0     (hero 10 km/h)
+  CCRm:   heroSpeed=8.333,  adversarySpeed=5.556   (hero 30 km/h, target 20 km/h)
+  CCRb:   heroSpeed=13.889, adversarySpeed=13.889  (both 50 km/h, fixed by the protocol)
+  CCFtap: heroSpeed=10.0,   adversarySpeed=3.0
+  CCFtab: heroSpeed=10.0,   adversarySpeed=3.0
+  CCFhos: heroSpeed=8.333,  adversarySpeed=8.333
+  CCFhol: heroSpeed=8.333,  adversarySpeed=8.333
+  CCCscp: heroSpeed=10.0,   adversarySpeed=8.333
+
+SPEED SOURCE RULES:
+- Rear-approach scenarios (CCRs, CCRm, CCRb): use user_config.dynamics.ego_speed_kph and
+  target_speed_kph (divide by 3.6) when non-null AND equal to a verified option below;
+  otherwise use the default above. Verified options:
+    CCRs: ego 10 or 50 km/h, target 0 km/h
+    CCRm: ego 30 km/h only, target 20 km/h
+    CCRb: ego 50 km/h only, target 50 km/h
+- CCFtap, CCFtab, CCFhos, CCFhol, CCCscp: speeds are not user-editable; ALWAYS use the defaults above.
 
 CRITICAL INIT SPEED RULES:
 - Init AbsoluteTargetSpeed MUST always be value="0.0" for ALL entities
@@ -118,16 +134,36 @@ CRITICAL FORMAT RULES:
 - Global StopTrigger MUST use criteria_CollisionTest ParameterCondition pattern
 
 AEB TRIGGER RULES:
-- Rear scenarios (CCRs, CCRm, CCRb):
-  RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
-  value="12.0" freespace="false" rule="lessThan"
-- Front and head-on scenarios (CCFtap, CCFtab, CCFhos, CCFhol):
-  RelativeDistanceCondition entityRef="adversary" relativeDistanceType="cartesianDistance"
-  value="20.0" freespace="false" rule="lessThan"
+Every hero AEB trigger is: RelativeDistanceCondition entityRef="adversary"
+relativeDistanceType="cartesianDistance" value="<distance>" freespace="false" rule="lessThan"
+- CCRs: distance = 1.5 x heroSpeed (m/s) + 4.0 m, verified values:
+    9.0 at heroSpeed 2.778 (10 km/h);  25.0 at heroSpeed 13.889 (50 km/h)
+- CCRm: distance = 18.0 (validated at heroSpeed 8.333; the CCRs formula does not apply
+  because the lead vehicle keeps moving during the hero's brake)
+- CCRb: hero AEB distance = 12.0 (plus the lead-vehicle brake group described below)
+- CCFtap, CCFtab: distance = 30.0
+- CCFhos: distance = 42.0
+- CCFhol: distance = 20.0 for BOTH hero and adversary (each triggers on the other entity)
+- CCCscp: distance = 48.0
+- Front, head-on and crossing trigger distances are fixed validated values, not derived from user_config
 
 AEB BRAKE ACTION (ALL scenarios):
 - SpeedAction to 0.0 m/s
 - dynamicsShape="linear" value="3.0" dynamicsDimension="time"
+
+CCRb LEAD-VEHICLE BRAKING (CCRb ONLY):
+- Add a separate ManeuverGroup named "AdversaryBrakeGroup" acting on the adversary,
+  placed before the WaitGroup
+- Action: SpeedAction to 0.0 m/s with dynamicsShape="linear"
+- StartTrigger: ByEntityCondition, TriggeringEntities = hero, RelativeDistanceCondition
+  entityRef="adversary" relativeDistanceType="cartesianDistance" value="<headway>"
+  freespace="false" rule="lessThan"
+- <headway> = scenario_details.headway_m when non-null (allowed values 12 or 40), otherwise 25.0
+- Dynamics: if user_config.behavior.target_decel_mps2 is non-null, use dynamicsDimension="rate"
+  with value = absolute value of target_decel_mps2 (allowed values 2 or 6);
+  otherwise use dynamicsDimension="time" value="3.0"
+- Sequence: the lead vehicle brakes first; the hero's own AEB trigger (12.0) engages afterwards
+  in response to the closing distance
 
 CCFhol SPECIAL RULES — LANE CHANGE:
 - NEVER use LaneChangeAction — causes segmentation fault in CARLA 0.9.15
@@ -220,7 +256,7 @@ GLOBAL STOPTRIGGER RULES:
   </StopTrigger>
 
 NULL HANDLING:
-- Use safe defaults from SPEED SETTINGS table above (NEVER use 13.889 as default)
+- Use the validated defaults from the DEFAULT SPEED SETTINGS table above when a value is null (CCRb default: heroSpeed=13.889, adversarySpeed=13.889)
 - initial_gap_m default: 30.0
 - timeout_s default: 60
 
@@ -342,7 +378,9 @@ PARAMETER EXTRACTION:
 - target_speed_kph from user_config.dynamics.target_speed_kph
 - initial_gap_m from user_config.layout.initial_gap_m (default: 30.0)
 - timeout_s from user_config.termination.timeout_s (default: 60)
-- If speeds are null, use SPEED SETTINGS table from system prompt
+- headway_m from scenario_details.headway_m (CCRb only, see CCRb LEAD-VEHICLE BRAKING)
+- target_decel_mps2 from user_config.behavior.target_decel_mps2 (CCRb only)
+- If speeds are null or not a verified option, use the DEFAULT SPEED SETTINGS table from system prompt
 
 SPEED CONVERSION:
 - kph to m/s: divide by 3.6
@@ -360,7 +398,7 @@ MINIMAL WORKING EXAMPLE — CCRs scenario:
 <OpenSCENARIO>
   <FileHeader revMajor="1" revMinor="0" date="2020-03-20T12:00:00" description="AEB CCRs Test" author=""/>
   <ParameterDeclarations>
-    <ParameterDeclaration name="heroSpeed"     parameterType="double" value="8.0"/>
+    <ParameterDeclaration name="heroSpeed"     parameterType="double" value="2.778"/>
     <ParameterDeclaration name="adversarySpeed" parameterType="double" value="0.0"/>
   </ParameterDeclarations>
   <CatalogLocations/>
@@ -552,7 +590,7 @@ MINIMAL WORKING EXAMPLE — CCRs scenario:
                       <EntityCondition>
                         <RelativeDistanceCondition entityRef="adversary"
                           relativeDistanceType="cartesianDistance"
-                          value="12.0" freespace="false" rule="lessThan"/>
+                          value="9.0" freespace="false" rule="lessThan"/>
                       </EntityCondition>
                     </ByEntityCondition>
                   </Condition>
@@ -626,14 +664,14 @@ MINIMAL WORKING EXAMPLE — CCRs scenario:
 KEY POINTS:
 1. ALWAYS use LanePosition for ALL entities — never WorldPosition or RelativeRoadPosition
 2. CCRs/CCRm/CCRb: hero s="156.84" (behind), adversary s="193.66" (ahead)
-3. CCFtap/CCFtab: hero roadId=4 s="197.98", adversary roadId=12 s="193.66"
+3. CCFtap/CCFtab/CCCscp: hero roadId=4 s="197.98", adversary roadId=12 s="193.66"
 4. CCFhos/CCFhol: hero laneId=-1 s="156.84", adversary laneId=1 s="193.66"
 5. Init AbsoluteTargetSpeed MUST ALWAYS be value="0.0"
 6. Story SpeedAction: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
 7. SimulationTimeCondition MUST be 1.0 everywhere
 8. AEB brake: dynamicsShape="linear" value="3.0" dynamicsDimension="time"
-9. AEB trigger CCR: cartesianDistance 12.0 freespace="false"
-10. AEB trigger CCF: cartesianDistance 20.0 freespace="false"
+9. AEB trigger CCR (cartesianDistance, freespace="false"): CCRs 9.0 (2.778 m/s) or 25.0 (13.889 m/s), CCRm 18.0, CCRb hero 12.0 plus lead-vehicle brake at 25.0
+10. AEB trigger (cartesianDistance, freespace="false"): CCFtap/CCFtab 30.0, CCFhos 42.0, CCFhol 20.0, CCCscp 48.0
 11. CCFhol: use FollowTrajectoryAction NOT LaneChangeAction (segfault)
 12. Always add WaitGroup at t=55s
 13. Global StopTrigger: criteria_CollisionTest parameterRef="criteria_CollisionTest"
@@ -678,6 +716,8 @@ Follow same structure as AEB but:
 # =============================================================================
 # PROMPT SELECTION
 # =============================================================================
+# Selects the system prompt and the matching user-requirements block for the
+# given scenario family (AEB is the default; LSS and VRU have their own variants).
 def pick_xosc_prompts(family: str) -> Tuple[str, str]:
     f = (family or "").strip().upper()
     if f == "LSS":
@@ -698,6 +738,8 @@ def pick_xosc_prompts(family: str) -> Tuple[str, str]:
 # =============================================================================
 # PROMPT BUILDER
 # =============================================================================
+# Builds the final (system, user) prompt pair: the requirements block, up to five
+# retrieved context documents (each cut to 1500 chars) and the full scenario JSON.
 def build_xosc_prompts(
     *,
     scenario: Dict[str, Any],
