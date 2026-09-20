@@ -292,7 +292,7 @@ VRU SPAWN POSITIONS (Town01 validated):
     Hero:        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
     Pedestrian:  <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
 
-  Cyclist scenarios (CBNa-25/50/75, CBFa-50):
+  Cyclist scenarios (CBNA-50, CBNAO-50, CBFA-50, CBLA-25, CBLA-50):
     Hero:        <LanePosition roadId="12" laneId="-1" offset="0.0" s="156.84"/>
     Cyclist:     <LanePosition roadId="12" laneId="-1" offset="0.0" s="193.66"/>
 
@@ -320,10 +320,11 @@ VRU SPEED SETTINGS (ALL pedestrian speeds = 1.389 m/s = 5 km/h):
   CPNCO-50: heroSpeed=8.333,  pedestrianSpeed=1.389
   CPLA-25:  heroSpeed=5.556,  pedestrianSpeed=1.389
   CPLA-50:  heroSpeed=8.333,  pedestrianSpeed=1.389
-  CBNa-25:  heroSpeed=5.556,  adversarySpeed=4.167
-  CBNa-50:  heroSpeed=8.333,  adversarySpeed=4.167
-  CBNa-75:  heroSpeed=11.111, adversarySpeed=4.167
-  CBFa-50:  heroSpeed=8.333,  adversarySpeed=4.167
+  CBNA-50:  heroSpeed=8.333,  adversarySpeed=4.167
+  CBNAO-50: heroSpeed=8.333,  adversarySpeed=4.167
+  CBFA-50:  heroSpeed=8.333,  adversarySpeed=4.167
+  CBLA-25:  heroSpeed=5.556,  adversarySpeed=4.167
+  CBLA-50:  heroSpeed=8.333,  adversarySpeed=4.167
   CMRs:     heroSpeed=8.333,  adversarySpeed=0.0
   CMRb:     heroSpeed=8.333,  adversarySpeed=8.333
   CMFtap:   heroSpeed=8.333,  adversarySpeed=8.333
